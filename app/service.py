@@ -215,17 +215,17 @@ class MemoryService:
             if row.occurred_at is not None and maximum > minimum:
                 ratio = (row.occurred_at - minimum) / (maximum - minimum)
                 if intent == "latest":
-                    time_score = 0.12 * ratio
+                    time_score = 0.16 * ratio
                 elif intent == "earliest":
-                    time_score = 0.12 * (1.0 - ratio)
+                    time_score = 0.16 * (1.0 - ratio)
             if intent == "latest" and has_update_marker(row.content):
                 time_score += 0.05
             score = (
-                0.42 * coverage(terms, values)
-                + 0.18 * (1.0 / (1.0 + index))
-                + 0.14 * coverage(expansion, values)
+                0.40 * coverage(terms, values)
+                + 0.16 * (1.0 / (1.0 + index))
+                + 0.12 * coverage(expansion, values)
                 + 0.10 * coverage(option_terms, values)
-                + 0.08 * phrase_bonus(query, row.content)
+                + 0.06 * phrase_bonus(query, row.content)
                 + time_score
             )
             ranked.append((score, row))
