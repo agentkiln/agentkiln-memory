@@ -26,6 +26,7 @@ The linked competition page states:
 | Lexical retrieval | Complete | FTS5 with English stemming, CJK n-grams, and phrase scoring. |
 | CJK candidate filtering | Complete | Two-character CJK terms participate in cross-modal candidate checks. |
 | Vector retrieval | Complete | Local mock and runtime-provider modes; RRF fusion with lexical candidates. |
+| Vector indexing | Complete | Embedding filters use a user, model, and dimension index. |
 | Vector abstention | Complete | Stricter similarity threshold when lexical retrieval has no matches. |
 | Provider resilience | Complete | Bounded retries honor Retry-After for transient model/network failures. |
 | Embedding validation | Complete | Provider responses with mixed or empty vector dimensions fail closed. |
