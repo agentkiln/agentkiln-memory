@@ -30,7 +30,7 @@ UPDATE_MARKERS = (
 )
 CONCEPTS = (
     {"prefer", "preference", "favorite", "favourite", "like", "love", "enjoy"},
-    {"live", "lives", "living", "home", "city", "country", "move", "moved", "relocated"},
+    {"live", "lives", "living", "home", "city", "country", "move", "moved", "relocated", "\u4f4f", "\u4f4f\u5728", "\u4f4f\u54ea", "\u5728\u4f4f", "\u642c\u5bb6", "\u642c\u5230", "\u5317\u4eac"},
     {"work", "job", "career", "profession", "occupation", "company", "role"},
     {"school", "study", "studied", "education", "university", "college", "degree"},
     {"book", "read", "reading", "author", "novel"},
