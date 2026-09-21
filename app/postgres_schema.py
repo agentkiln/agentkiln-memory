@@ -20,6 +20,17 @@ def to_tsquery(query: str) -> str:
     return " | ".join(terms[:200])
 
 
+def cjk_terms(query: str) -> list[str]:
+    """Return CJK terms that PostgreSQL's simple parser will not tokenize."""
+    terms: list[str] = []
+    for match in QUOTED_TERM_RE.finditer(query):
+        term = match.group(1).replace('""', '"').strip()
+        cleaned = re.sub(r"[^\w\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+", "", term)
+        if cleaned and not cleaned.isascii():
+            terms.append(cleaned)
+    return terms[:200]
+
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS requests (
     user_id TEXT NOT NULL,

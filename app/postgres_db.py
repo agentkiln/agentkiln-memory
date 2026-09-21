@@ -6,7 +6,7 @@ import math
 from datetime import datetime, timezone
 
 from .db import MemoryRow
-from .postgres_schema import SCHEMA_SQL, to_tsquery
+from .postgres_schema import SCHEMA_SQL, cjk_terms, to_tsquery
 from .schemas import AddRequest
 from .text import lexical_terms
 
@@ -135,27 +135,41 @@ class PostgresMemoryDatabase:
 
     def lexical_search(self, user_id: str, query: str, limit: int) -> list[MemoryRow]:
         tsquery = to_tsquery(query)
-        if not tsquery:
+        cjk = cjk_terms(query)
+        if not tsquery and not cjk:
             return []
+        conditions: list[str] = []
+        params: list[object] = []
+        if tsquery:
+            conditions.append(
+                "to_tsvector('simple', coalesce(m.content, '') || ' ' || "
+                "coalesce(m.search_text, '')) @@ to_tsquery('simple', %s)"
+            )
+            params.append(tsquery)
+        if cjk:
+            cjk_clauses = " OR ".join("m.content LIKE %s" for _ in cjk)
+            conditions.append(f"({cjk_clauses})")
+            params.extend(f"%{term}%" for term in cjk)
+        rank_expression = (
+            "ts_rank("
+            "to_tsvector('simple', coalesce(m.content, '') || ' ' || coalesce(m.search_text, '')), "
+            "to_tsquery('simple', %s))"
+            if tsquery
+            else "0.0"
+        )
+        rank_params = [tsquery] if tsquery else []
+        sql = f"""
+            SELECT m.id, m.user_id, m.session_id, m.request_id, m.ordinal,
+                   m.role, m.content, m.occurred_at, m.created_at, m.search_text,
+                   {rank_expression} AS rank
+            FROM memories AS m
+            WHERE m.user_id = %s AND ({' OR '.join(conditions)})
+            ORDER BY rank DESC
+            LIMIT %s
+        """
         with self._connect() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT m.id, m.user_id, m.session_id, m.request_id, m.ordinal,
-                           m.role, m.content, m.occurred_at, m.created_at, m.search_text,
-                           ts_rank(
-                               to_tsvector('simple', coalesce(m.content, '') || ' ' || coalesce(m.search_text, '')),
-                               to_tsquery('simple', %s)
-                           ) AS rank
-                    FROM memories AS m
-                    WHERE m.user_id = %s
-                      AND to_tsvector('simple', coalesce(m.content, '') || ' ' || coalesce(m.search_text, ''))
-                          @@ to_tsquery('simple', %s)
-                    ORDER BY rank DESC
-                    LIMIT %s
-                    """,
-                    (tsquery, user_id, tsquery, limit),
-                )
+                cursor.execute(sql, (*rank_params, user_id, *params, limit))
                 rows = cursor.fetchall()
         return [
             MemoryRow(

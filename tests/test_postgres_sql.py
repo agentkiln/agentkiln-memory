@@ -14,6 +14,13 @@ def test_to_tsquery_returns_empty_for_no_terms() -> None:
     assert to_tsquery('"***"') == ""
 
 
+def test_to_tsquery_marks_cjk_terms_for_like_fallback() -> None:
+    from app.postgres_schema import cjk_terms
+
+    assert cjk_terms('"居住" OR "京都"') == ["居住", "京都"]
+    assert cjk_terms('"alpha"') == []
+
+
 def test_schema_sql_avoids_sqlite_only_features() -> None:
     lowered = SCHEMA_SQL.lower()
     assert "autoincrement" not in lowered
