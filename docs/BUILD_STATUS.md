@@ -28,6 +28,7 @@ The linked competition page states:
 | Vector retrieval | Complete | Local mock and runtime-provider modes; RRF fusion with lexical candidates. |
 | Vector abstention | Complete | Stricter similarity threshold when lexical retrieval has no matches. |
 | Provider resilience | Complete | Bounded retries honor Retry-After for transient model/network failures. |
+| Embedding validation | Complete | Provider responses with mixed or empty vector dimensions fail closed. |
 | Load control | Complete | Add and Search concurrency are bounded in process and configurable for capacity. |
 | Evidence output | Complete | Token-bounded, source-deduplicated conversation windows with timestamps. |
 | Long-source packing | Complete | A single oversized source is truncated within budget instead of dropped. |

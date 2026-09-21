@@ -45,6 +45,9 @@ class MemoryLLM:
         vectors = [[float(value) for value in row["embedding"]] for row in rows]
         if len(vectors) != len(texts):
             raise LLMUnavailable("embedding response count mismatch")
+        dimensions = {len(vector) for vector in vectors}
+        if len(dimensions) > 1 or (vectors and len(vectors[0]) == 0):
+            raise LLMUnavailable("embedding dimensions are inconsistent")
         return vectors
 
     def annotate_messages(self, messages: list[MemoryMessage]) -> list[str]:
