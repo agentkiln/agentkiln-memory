@@ -43,3 +43,17 @@ def test_pack_windows_respects_max_items() -> None:
     )
     assert packed == []
 
+
+def test_pack_windows_does_not_drop_second_relation_end() -> None:
+    first = row("mem_1", "Alice's mentor is Bob.")
+    second = row("mem_2", "Bob lives in Kyoto.", ordinal=1)
+    packed = pack_windows(
+        [
+            (0.9, first, [first]),
+            (0.8, second, [second]),
+        ],
+        top_k=2,
+        max_tokens=100,
+        max_items=2,
+    )
+    assert [window.source_id for window in packed] == ["mem_1", "mem_2"]
