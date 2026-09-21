@@ -53,36 +53,38 @@ def evaluate(path: Path, top_k: int, limit: int | None) -> dict:
         search_concurrency=32,
         add_concurrency=16,
     )
-    service = MemoryService(settings)
-    service.initialize()
-    hits = 0
-    latencies: list[float] = []
-    total = 0
-    for index, record in enumerate(records):
-        user_id = f"eval:{index}"
-        messages = [
-            MemoryMessage(role="user", content=str(item), timestamp=None)
-            for item in record.get("memory", record.get("messages", []))
-        ]
-        if messages:
-            service.add(
-                AddRequest(
-                    request_id=f"eval:{index}:add",
-                    messages=messages,
-                    user_id=user_id,
-                    session_id=f"eval:{index}:session",
+    try:
+        service = MemoryService(settings)
+        service.initialize()
+        hits = 0
+        latencies: list[float] = []
+        total = 0
+        for index, record in enumerate(records):
+            user_id = str(record.get("user_id") or record.get("history_id") or f"eval:{index}")
+            messages = [
+                MemoryMessage(role="user", content=str(item), timestamp=None)
+                for item in record.get("memory", record.get("messages", []))
+            ]
+            if messages:
+                service.add(
+                    AddRequest(
+                        request_id=f"eval:{user_id}:add:{index}",
+                        messages=messages,
+                        user_id=user_id,
+                        session_id=str(record.get("session_id") or f"eval:{user_id}:session:{index}"),
+                    )
                 )
-            )
-        query = str(record.get("question") or record.get("query") or "")
-        if not query:
-            continue
-        total += 1
-        started = time.perf_counter()
-        result = service.search(SearchRequest(query=query, user_id=user_id, top_k=top_k))
-        latencies.append(time.perf_counter() - started)
-        if _matches_evidence(record, result):
-            hits += 1
-    temporary.cleanup()
+            query = str(record.get("question") or record.get("query") or "")
+            if not query:
+                continue
+            total += 1
+            started = time.perf_counter()
+            result = service.search(SearchRequest(query=query, user_id=user_id, top_k=top_k))
+            latencies.append(time.perf_counter() - started)
+            if _matches_evidence(record, result):
+                hits += 1
+    finally:
+        temporary.cleanup()
     return {
         "records": len(records),
         "scored_questions": total,

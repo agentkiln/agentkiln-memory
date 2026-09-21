@@ -455,6 +455,32 @@ def test_add_rejects_oversized_message_batch(tmp_path: Path) -> None:
     assert client.post("/add", json=payload).status_code == 422
 
 
+def test_search_rejects_oversized_query_and_options(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    assert client.post(
+        "/search",
+        json={"query": "q" * 8_001, "user_id": "user-a", "top_k": 5},
+    ).status_code == 422
+    assert client.post(
+        "/search",
+        json={
+            "query": "bounded",
+            "options": ["x" * 2_001],
+            "user_id": "user-a",
+            "top_k": 5,
+        },
+    ).status_code == 422
+    assert client.post(
+        "/search",
+        json={
+            "query": "bounded",
+            "options": ["option"] * 101,
+            "user_id": "user-a",
+            "top_k": 5,
+        },
+    ).status_code == 422
+
+
 def test_implicit_recency_prefers_newer_state_when_dates_are_available(tmp_path: Path) -> None:
     client = TestClient(create_app(settings(tmp_path)))
     for request_id, timestamp, content in (
