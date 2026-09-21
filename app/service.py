@@ -231,7 +231,7 @@ class MemoryService:
                 row,
                 sorted(
                     window_map.get(row.id) or [row],
-                    key=lambda item: (item.occurred_at or 0, item.ordinal, item.row_id),
+                    key=MemoryRow.source_order,
                 ),
             )
             for score, row in selected

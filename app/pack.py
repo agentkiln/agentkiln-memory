@@ -36,7 +36,7 @@ def pack_windows(
             break
         lines: list[str] = []
         ids: list[str] = []
-        ordered = sorted(context or [anchor], key=lambda row: (row.occurred_at or 0, row.ordinal, row.row_id))
+        ordered = sorted(context or [anchor], key=MemoryRow.source_order)
         for row in ordered:
             if row.id in seen:
                 continue
@@ -53,4 +53,3 @@ def pack_windows(
         output.append(PackedWindow(anchor.id, score, content, tuple(ids)))
         seen.update(ids)
     return output
-
