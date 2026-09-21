@@ -434,3 +434,13 @@ def test_search_cache_invalidates_when_add_concurrency_changes(tmp_path: Path) -
         json={"query": "jasmine tea", "user_id": "user-a", "top_k": 5},
     ).json()
     assert second["data"]
+
+
+def test_identifier_fields_reject_unbounded_values(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    payload = add_payload()
+    payload["request_id"] = "x" * 513
+    assert client.post("/add", json=payload).status_code == 422
+    payload = add_payload()
+    payload["user_id"] = "u" * 513
+    assert client.post("/add", json=payload).status_code == 422

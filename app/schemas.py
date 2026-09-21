@@ -19,10 +19,10 @@ class MemoryMessage(BaseModel):
 class AddRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: str = Field(min_length=1)
+    request_id: str = Field(min_length=1, max_length=512)
     messages: list[MemoryMessage] = Field(min_length=1)
-    user_id: str = Field(min_length=1)
-    session_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1, max_length=512)
+    session_id: str = Field(min_length=1, max_length=512)
 
     def payload_hash(self) -> str:
         payload = {
@@ -52,7 +52,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(min_length=1)
     options: list[str] | None = None
-    user_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1, max_length=512)
     top_k: int = Field(ge=1, le=100)
 
     @field_validator("query")
@@ -79,4 +79,3 @@ class HealthResponse(BaseModel):
     version: str
     llm_mode: str
     llm_ready: bool
-
