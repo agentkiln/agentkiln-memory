@@ -45,6 +45,7 @@ The linked competition page states:
 | Multi-hop evidence | Covered | Relation-end tests verify complementary evidence survives packing. |
 | Cache integrity | Complete | Search cache keys include the full retrieval configuration. |
 | Temporal intent | Complete | Latest/earliest scoring and correction-aware selection. |
+| Marker matching | Complete | English temporal and update markers require word boundaries, avoiding substring false positives. |
 | Offline evaluation | Complete | JSONL retrieval panel reports hit rate and latency. |
 | Evidence matching | Complete | Offline evaluation accepts evidence IDs or evidence text. |
 | Docker deployment | Complete | Dockerfile, Compose file, persistent volume, health check, and non-root user. |

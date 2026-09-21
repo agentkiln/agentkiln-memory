@@ -1,4 +1,11 @@
-from app.text import estimate_tokens, fts_query, lexical_overlap, lexical_terms, temporal_intent
+from app.text import (
+    estimate_tokens,
+    fts_query,
+    has_update_marker,
+    lexical_overlap,
+    lexical_terms,
+    temporal_intent,
+)
 
 
 def test_lexical_terms_drop_question_scaffolding() -> None:
@@ -22,6 +29,15 @@ def test_temporal_intent_marks_latest_and_earliest() -> None:
     assert temporal_intent("What is the latest value?") == "latest"
     assert temporal_intent("What was the first value?") == "earliest"
     assert temporal_intent("Where did Alice move?") == "none"
+
+
+def test_temporal_intent_ignores_marker_substrings() -> None:
+    assert temporal_intent("What do you know about Alice?") == "none"
+    assert temporal_intent("Describe the blast radius.") == "none"
+
+
+def test_update_marker_ignores_substrings() -> None:
+    assert has_update_marker("Alice visited the known landmark.") is False
 
 
 def test_cjk_token_estimate_does_not_under_count() -> None:

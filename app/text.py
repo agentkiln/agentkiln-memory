@@ -134,16 +134,27 @@ def lexical_overlap(terms: list[str], content: str, search_text: str = "") -> bo
 
 def temporal_intent(query: str) -> str:
     normalized = normalize_text(query)
-    if any(marker in normalized for marker in EARLIEST_MARKERS):
+    if _contains_marker(normalized, EARLIEST_MARKERS):
         return "earliest"
-    if any(marker in normalized for marker in LATEST_MARKERS):
+    if _contains_marker(normalized, LATEST_MARKERS):
         return "latest"
     return "none"
 
 
 def has_update_marker(value: str) -> bool:
     normalized = normalize_text(value)
-    return any(marker in normalized for marker in UPDATE_MARKERS)
+    return _contains_marker(normalized, UPDATE_MARKERS)
+
+
+def _contains_marker(normalized: str, markers: tuple[str, ...]) -> bool:
+    for marker in markers:
+        if any(character.isascii() and character.isalpha() for character in marker):
+            pattern = r"(?<![a-z0-9_])" + re.escape(marker) + r"(?![a-z0-9_])"
+            if re.search(pattern, normalized):
+                return True
+        elif marker in normalized:
+            return True
+    return False
 
 
 def estimate_tokens(value: str) -> int:
