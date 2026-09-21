@@ -315,3 +315,26 @@ def test_add_write_failure_rolls_back_all_message_rows(tmp_path: Path) -> None:
         json={"query": "rollback marker", "user_id": "rollback-user", "top_k": 10},
     ).json()
     assert result == {"data": []}
+
+
+def test_search_output_skips_unknown_packed_source_ids(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    assert client.post("/add", json=add_payload()).status_code == 200
+    with patch("app.service.pack_windows") as packer:
+        packer.return_value = [
+            type(
+                "Packed",
+                (),
+                {
+                    "source_id": "mem_missing",
+                    "content": "orphan",
+                    "score": 1.0,
+                },
+            )()
+        ]
+        result = client.post(
+            "/search",
+            json={"query": "jasmine tea", "user_id": "user-a", "top_k": 5},
+        )
+    assert result.status_code == 200
+    assert result.json() == {"data": []}

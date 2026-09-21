@@ -133,14 +133,16 @@ class MemoryService:
             max_tokens=self.settings.max_output_tokens,
             max_items=self.settings.max_output_items,
         )
+        rows_by_id = {row.id: row for row in candidates}
         output = [
             SearchItem(
                 id=window.source_id,
                 content=window.content,
                 score=round(max(0.0, min(1.0, window.score)), 6),
-                created_at=next(row.created_at for row in candidates if row.id == window.source_id),
+                created_at=rows_by_id[window.source_id].created_at,
             )
             for window in packed
+            if window.source_id in rows_by_id
         ]
         with self._cache_lock:
             self._store_cache(cache_key, output)
