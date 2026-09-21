@@ -16,6 +16,14 @@ DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
 
 The service creates its tables on startup. Keep the database awake settings at auto-suspend to stay within the free credit.
 
+To create the schema manually before first boot:
+
+```powershell
+pip install "psycopg[binary]"
+$env:DATABASE_URL="postgresql://...?...sslmode=require"
+py scripts/init_postgres.py
+```
+
 ## App
 
 Create an App from the private GitHub repository and select the `PandaStack` branch.
