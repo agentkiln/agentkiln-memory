@@ -453,3 +453,25 @@ def test_add_rejects_oversized_message_batch(tmp_path: Path) -> None:
         {"role": "user", "content": f"memory item {index}"} for index in range(201)
     ]
     assert client.post("/add", json=payload).status_code == 422
+
+
+def test_implicit_recency_prefers_newer_state_when_dates_are_available(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    for request_id, timestamp, content in (
+        ("recency-old", 1704067200000, "My backup contact is Alice."),
+        ("recency-new", 1735689600000, "My backup contact is Bob."),
+    ):
+        assert client.post(
+            "/add",
+            json={
+                "request_id": request_id,
+                "messages": [{"role": "user", "timestamp": timestamp, "content": content}],
+                "user_id": "recency-user",
+                "session_id": "recency-session",
+            },
+        ).status_code == 200
+    result = client.post(
+        "/search",
+        json={"query": "Who is my backup contact?", "user_id": "recency-user", "top_k": 1},
+    ).json()["data"][0]
+    assert "Bob" in result["content"]
