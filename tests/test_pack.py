@@ -57,3 +57,17 @@ def test_pack_windows_does_not_drop_second_relation_end() -> None:
         max_items=2,
     )
     assert [window.source_id for window in packed] == ["mem_1", "mem_2"]
+
+
+def test_pack_windows_truncates_single_oversized_source() -> None:
+    oversized = row("mem_long", "x" * 400)
+    packed = pack_windows(
+        [(0.9, oversized, [oversized])],
+        top_k=1,
+        max_tokens=10,
+        max_items=1,
+    )
+    assert len(packed) == 1
+    assert packed[0].source_id == "mem_long"
+    assert packed[0].content.endswith("...")
+    assert len(packed[0].content) <= 40

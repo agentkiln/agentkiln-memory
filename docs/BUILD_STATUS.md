@@ -30,6 +30,7 @@ The linked competition page states:
 | Provider resilience | Complete | Bounded retries honor Retry-After for transient model/network failures. |
 | Load control | Complete | Add and Search concurrency are bounded in process and configurable for capacity. |
 | Evidence output | Complete | Token-bounded, source-deduplicated conversation windows with timestamps. |
+| Long-source packing | Complete | A single oversized source is truncated within budget instead of dropped. |
 | Output robustness | Complete | Unknown packed source IDs are skipped instead of failing the request. |
 | Token budgeting | Complete | CJK characters are counted separately to avoid under-budgeting Chinese evidence. |
 | Concurrent chunk order | Complete | Source windows use chunk index, timestamp, and ordinal together. |

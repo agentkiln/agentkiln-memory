@@ -22,6 +22,13 @@ def render_line(row: MemoryRow) -> str:
     return f"[{row.id} | {row.role}] {row.content}"
 
 
+def truncate_line(line: str, max_tokens: int) -> str:
+    max_characters = max_tokens * 4
+    if len(line) <= max_characters:
+        return line
+    return line[: max(0, max_characters - 3)].rstrip() + "..."
+
+
 def pack_windows(
     ranked: list[tuple[float, MemoryRow, list[MemoryRow]]],
     top_k: int,
@@ -43,6 +50,11 @@ def pack_windows(
             line = render_line(row)
             candidate = "\n".join(lines + [line])
             if used + estimate_tokens(candidate) > max_tokens:
+                if not lines:
+                    line = truncate_line(line, max(1, max_tokens - used))
+                    if line and used + estimate_tokens(line) <= max_tokens:
+                        lines.append(line)
+                        ids.append(row.id)
                 break
             lines.append(line)
             ids.append(row.id)
