@@ -20,7 +20,7 @@ class AddRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     request_id: str = Field(min_length=1, max_length=512)
-    messages: list[MemoryMessage] = Field(min_length=1)
+    messages: list[MemoryMessage] = Field(min_length=1, max_length=200)
     user_id: str = Field(min_length=1, max_length=512)
     session_id: str = Field(min_length=1, max_length=512)
 
