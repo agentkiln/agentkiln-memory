@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 import urllib.error
 from unittest.mock import patch
@@ -104,3 +105,23 @@ def test_embedding_vectors_are_checked_for_consistency(tmp_path: Path) -> None:
             assert "dimension" in str(exc).lower()
         else:
             raise AssertionError("expected inconsistent dimensions to fail")
+
+
+def test_http_error_includes_upstream_body(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    error = urllib.error.HTTPError(
+        url="https://example.test",
+        code=422,
+        msg="Unprocessable Entity",
+        hdrs={},
+        fp=io.BytesIO(b'{"error":"response_format is not supported"}'),
+    )
+    with patch("app.llm.urllib.request.urlopen", side_effect=error):
+        try:
+            llm._post("/chat/completions", {"model": "x"})
+        except Exception as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("expected failure")
+    assert "422" in message
+    assert "response_format is not supported" in message
