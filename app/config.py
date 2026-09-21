@@ -17,6 +17,8 @@ class Settings:
     openai_base_url: str
     openai_model: str
     embedding_model: str
+    embedding_api_key: str | None
+    embedding_base_url: str
     timeout_seconds: float
     candidate_limit: int
     max_output_tokens: int
@@ -46,14 +48,23 @@ class Settings:
         base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         if production and not base_url.startswith("https://"):
             raise ValueError("AML_PRODUCTION requires an HTTPS OPENAI_BASE_URL")
+        openai_api_key = (os.getenv("OPENAI_API_KEY") or "").strip() or None
+        embedding_api_key = (
+            os.getenv("OPENAI_EMBEDDING_API_KEY") or openai_api_key or ""
+        ).strip() or None
+        embedding_base_url = (
+            os.getenv("OPENAI_EMBEDDING_BASE_URL") or base_url
+        ).strip().rstrip("/")
         return cls(
             database_path=Path(os.getenv("AML_DATABASE_PATH", "data/memory.db")),
-            api_key=os.getenv("AML_API_KEY") or None,
+            api_key=production_api_key or None,
             llm_mode=mode,
-            openai_api_key=os.getenv("OPENAI_API_KEY") or None,
+            openai_api_key=openai_api_key,
             openai_base_url=base_url,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-v4"),
+            embedding_api_key=embedding_api_key,
+            embedding_base_url=embedding_base_url,
             timeout_seconds=float(os.getenv("AML_TIMEOUT_SECONDS", "90")),
             candidate_limit=max(40, min(2000, int(os.getenv("AML_CANDIDATE_LIMIT", "300")))),
             max_output_tokens=max(1000, int(os.getenv("AML_MAX_OUTPUT_TOKENS", "8000"))),

@@ -1,0 +1,22 @@
+name: Deploy to PandaStack
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger PandaStack deploy
+        run: |
+          curl --fail-with-body \
+            -X POST \
+            "https://api.pandastack.ai/v1/apps/22cd4bb2-6b89-46cc-9a61-909da19eb89c/deploys" \
+            -H "Authorization: Bearer ${{ secrets.PANDASTACK_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
