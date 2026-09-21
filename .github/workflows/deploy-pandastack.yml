@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,13 +12,16 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ secrets.PANDASTACK_API_KEY != '' }}
     steps:
       - name: Trigger PandaStack deploy
+        env:
+          PANDASTACK_API_KEY: ${{ secrets.PANDASTACK_API_KEY }}
         run: |
-          token="$(printf '%s' "${{ secrets.PANDASTACK_API_KEY }}" | tr -d '\r\n')"
+          token="$(printf '%s' "$PANDASTACK_API_KEY" | tr -d '\r\n')"
           token="${token#Bearer }"
           token="${token#bearer }"
-          if [ -z "$token" ]; then
+          if [ -z "${token//[[:space:]]/}" ]; then
             echo "PANDASTACK_API_KEY is empty"
             exit 1
           fi
