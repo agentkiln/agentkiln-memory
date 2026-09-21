@@ -18,6 +18,8 @@ The linked competition page states:
 | Repository | Complete | AgentKiln Memory project sources and deployment files. |
 | Database backends | Complete | SQLite for local development; PostgreSQL on the PandaStack branch. |
 | PostgreSQL schema | Complete | `scripts/init_postgres.py` creates tables with GIN full-text indexes. |
+| PostgreSQL CJK search | Complete | Untokenized CJK text falls back to substring matching; ASCII keeps tsquery. |
+| PostgreSQL verification | Complete | `scripts/verify_postgres.py` ran Add/Search and CJK retrieval against PandaStack PostgreSQL. |
 | PandaStack deployment | Prepared | App start command uses `$PORT`; see `deploy/PandaStack.md`. |
 | Add/Search API | Complete | Synchronous contracts, aliases, validation, idempotency, and conflict handling. |
 | Input bounds | Complete | Identifier fields reject values longer than 512 characters. |
