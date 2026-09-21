@@ -34,6 +34,7 @@ The linked competition page states:
 | Embedding validation | Complete | Provider responses with mixed or empty vector dimensions fail closed. |
 | Load control | Complete | Add and Search concurrency are bounded in process and configurable for capacity. |
 | Evidence output | Complete | Token-bounded, source-deduplicated conversation windows with timestamps. |
+| Score contract | Covered | Returned scores are bounded to 0-1 and sorted descending. |
 | Long-source packing | Complete | A single oversized source is truncated within budget instead of dropped. |
 | CJK packing | Covered | Oversized CJK evidence is truncated within its budget. |
 | Output robustness | Complete | Unknown packed source IDs are skipped instead of failing the request. |
