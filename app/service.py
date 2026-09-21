@@ -72,6 +72,7 @@ class MemoryService:
             self.settings.max_output_items,
             self.settings.vector_min_similarity,
             self.settings.vector_only_min_similarity,
+            self.settings.rerank_model,
             self.settings.search_concurrency,
             self.settings.add_concurrency,
         )

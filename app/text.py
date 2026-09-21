@@ -124,7 +124,7 @@ def lexical_overlap(terms: list[str], content: str, search_text: str = "") -> bo
     query_terms = {
         term
         for term in terms
-        if CJK_RE.fullmatch(term) and len(term) >= 2 or len(term) > 2
+        if (CJK_RE.fullmatch(term) and len(term) >= 2) or len(term) > 2
     }
     if not query_terms:
         return False

@@ -67,6 +67,7 @@ class MemoryLLM:
         if any(value is None for value in scores):
             return None
         return [float(value) for value in scores]
+
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         self._require_competition_key()
         if self.settings.llm_mode != "competition" or not self.settings.embedding_api_key:
