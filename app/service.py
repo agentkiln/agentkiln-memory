@@ -69,6 +69,7 @@ class MemoryService:
             self.settings.vector_min_similarity,
             self.settings.vector_only_min_similarity,
             self.settings.search_concurrency,
+            self.settings.add_concurrency,
         )
         with self._cache_lock:
             cached = self._cache.get(cache_key)

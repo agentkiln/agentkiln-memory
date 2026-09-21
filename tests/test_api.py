@@ -364,3 +364,73 @@ def test_window_repairs_out_of_order_concurrent_chunks(tmp_path: Path) -> None:
         },
     ).json()["data"][0]["content"]
     assert content.index("checkpoint question") < content.index("answer is zebra")
+
+
+def test_multi_hop_returns_both_relation_ends(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    for request_id, content in (
+        ("hop-1", "Alice's mentor is Bob."),
+        ("hop-2", "Bob lives in Kyoto."),
+        ("hop-3", "Alice likes jazz music."),
+    ):
+        response = client.post(
+            "/add",
+            json={
+                "request_id": request_id,
+                "messages": [{"role": "user", "timestamp": 1704067200000, "content": content}],
+                "user_id": "hop-user",
+                "session_id": "hop-session",
+            },
+        )
+        assert response.status_code == 200
+    evidence = " ".join(
+        item["content"]
+        for item in client.post(
+            "/search",
+            json={
+                "query": "Where does Alice's mentor live?",
+                "user_id": "hop-user",
+                "top_k": 2,
+            },
+        ).json()["data"]
+    )
+    assert "mentor is Bob" in evidence
+    assert "Bob lives in Kyoto" in evidence
+
+
+def test_search_cache_invalidates_when_add_concurrency_changes(tmp_path: Path) -> None:
+    configured = settings(tmp_path)
+    limited = Settings(
+        database_path=configured.database_path,
+        api_key=configured.api_key,
+        llm_mode=configured.llm_mode,
+        openai_api_key=configured.openai_api_key,
+        openai_base_url=configured.openai_base_url,
+        openai_model=configured.openai_model,
+        embedding_model=configured.embedding_model,
+        timeout_seconds=configured.timeout_seconds,
+        candidate_limit=configured.candidate_limit,
+        max_output_tokens=configured.max_output_tokens,
+        max_output_items=configured.max_output_items,
+        vector_min_similarity=configured.vector_min_similarity,
+        vector_only_min_similarity=configured.vector_only_min_similarity,
+        search_concurrency=configured.search_concurrency,
+        add_concurrency=1,
+    )
+    client = TestClient(create_app(limited))
+    payload = add_payload()
+    assert client.post("/add", json=payload).status_code == 200
+    first = client.post(
+        "/search",
+        json={"query": "jasmine tea", "user_id": "user-a", "top_k": 5},
+    ).json()
+    assert first["data"]
+    changed = add_payload()
+    changed["request_id"] = "req-added-later"
+    changed["messages"][0]["content"] = "A new unrelated note."
+    assert client.post("/add", json=changed).status_code == 200
+    second = client.post(
+        "/search",
+        json={"query": "jasmine tea", "user_id": "user-a", "top_k": 5},
+    ).json()
+    assert second["data"]
