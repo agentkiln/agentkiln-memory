@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+
+PRODUCTION_ENV_VALUES = {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class Settings:
+    database_path: Path
+    api_key: str | None
+    llm_mode: str
+    openai_api_key: str | None
+    openai_base_url: str
+    openai_model: str
+    embedding_model: str
+    timeout_seconds: float
+    candidate_limit: int
+    max_output_tokens: int
+    max_output_items: int
+    vector_min_similarity: float
+    vector_only_min_similarity: float
+    search_concurrency: int
+    add_concurrency: int
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        mode = os.getenv("AML_LLM_MODE", "off").strip().lower()
+        if mode not in {"off", "dev_mock", "competition"}:
+            raise ValueError("AML_LLM_MODE must be off, dev_mock, or competition")
+        production = os.getenv("AML_PRODUCTION", "").strip().lower() in PRODUCTION_ENV_VALUES
+        allow_mock_deploy = os.getenv("AML_ALLOW_MOCK_DEPLOY", "").strip().lower() in PRODUCTION_ENV_VALUES
+        if production and mode != "competition" and not allow_mock_deploy:
+            raise ValueError("AML_PRODUCTION requires AML_LLM_MODE=competition")
+        if production and not (os.getenv("AML_API_KEY") or "").strip():
+            raise ValueError("AML_PRODUCTION requires AML_API_KEY")
+        production_api_key = (os.getenv("AML_API_KEY") or "").strip()
+        if production and len(production_api_key) < 16:
+            raise ValueError("AML_PRODUCTION requires AML_API_KEY with at least 16 characters")
+        if production and not (os.getenv("OPENAI_API_KEY") or "").strip():
+            raise ValueError("AML_PRODUCTION requires OPENAI_API_KEY")
+        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        if production and not base_url.startswith("https://"):
+            raise ValueError("AML_PRODUCTION requires an HTTPS OPENAI_BASE_URL")
+        return cls(
+            database_path=Path(os.getenv("AML_DATABASE_PATH", "data/memory.db")),
+            api_key=os.getenv("AML_API_KEY") or None,
+            llm_mode=mode,
+            openai_api_key=os.getenv("OPENAI_API_KEY") or None,
+            openai_base_url=base_url,
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-v4"),
+            timeout_seconds=float(os.getenv("AML_TIMEOUT_SECONDS", "90")),
+            candidate_limit=max(40, min(2000, int(os.getenv("AML_CANDIDATE_LIMIT", "300")))),
+            max_output_tokens=max(1000, int(os.getenv("AML_MAX_OUTPUT_TOKENS", "8000"))),
+            max_output_items=max(1, min(100, int(os.getenv("AML_MAX_OUTPUT_ITEMS", "24")))),
+            vector_min_similarity=float(os.getenv("AML_VECTOR_MIN_SIMILARITY", "0.35")),
+            vector_only_min_similarity=float(os.getenv("AML_VECTOR_ONLY_MIN_SIMILARITY", "0.65")),
+            search_concurrency=max(1, min(256, int(os.getenv("AML_SEARCH_CONCURRENCY", "32")))),
+            add_concurrency=max(1, min(64, int(os.getenv("AML_ADD_CONCURRENCY", "16")))),
+        )

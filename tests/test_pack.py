@@ -1,0 +1,45 @@
+from pathlib import Path
+
+from app.db import MemoryRow
+from app.pack import pack_windows
+
+
+def row(memory_id: str, content: str, ordinal: int = 0) -> MemoryRow:
+    return MemoryRow(
+        id=memory_id,
+        row_id=ordinal + 1,
+        user_id="user-a",
+        session_id="session-a",
+        request_id=f"req-{memory_id}",
+        ordinal=ordinal,
+        role="user",
+        content=content,
+        occurred_at=1704067200000 + ordinal,
+        created_at="2024-01-01T00:00:00+00:00",
+        search_text=content,
+        fts_rank=1.0,
+    )
+
+
+def test_pack_windows_deduplicates_sources() -> None:
+    first = row("mem_1", "alpha")
+    second = row("mem_2", "beta")
+    packed = pack_windows(
+        [(0.9, first, [first, second]), (0.8, second, [second])],
+        top_k=10,
+        max_tokens=100,
+        max_items=10,
+    )
+    assert len(packed) == 1
+    assert packed[0].source_ids == ("mem_1", "mem_2")
+
+
+def test_pack_windows_respects_max_items() -> None:
+    packed = pack_windows(
+        [(0.9, row("mem_1", "alpha"), [row("mem_1", "alpha")])],
+        top_k=10,
+        max_tokens=100,
+        max_items=0,
+    )
+    assert packed == []
+
