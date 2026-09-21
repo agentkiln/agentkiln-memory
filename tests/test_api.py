@@ -338,3 +338,29 @@ def test_search_output_skips_unknown_packed_source_ids(tmp_path: Path) -> None:
         )
     assert result.status_code == 200
     assert result.json() == {"data": []}
+
+
+def test_window_repairs_out_of_order_concurrent_chunks(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    common = {"user_id": "chunk-user", "session_id": "shared-session"}
+    chunk_one = {
+        **common,
+        "request_id": "eval:sample:chunk-1",
+        "messages": [{"role": "assistant", "content": "The answer is zebra."}],
+    }
+    chunk_zero = {
+        **common,
+        "request_id": "eval:sample:chunk-0",
+        "messages": [{"role": "user", "content": "The checkpoint question is ready."}],
+    }
+    assert client.post("/add", json=chunk_one).status_code == 200
+    assert client.post("/add", json=chunk_zero).status_code == 200
+    content = client.post(
+        "/search",
+        json={
+            "query": "What answer follows the checkpoint question?",
+            "user_id": "chunk-user",
+            "top_k": 1,
+        },
+    ).json()["data"][0]["content"]
+    assert content.index("checkpoint question") < content.index("answer is zebra")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -28,6 +29,12 @@ class MemoryRow:
     created_at: str
     search_text: str
     fts_rank: float
+
+    def source_order(self) -> tuple[int, int, int, int]:
+        match = re.search(r"(?:^|[-_:])chunk[-_:]?(\d+)(?:$|[-_:])", self.request_id)
+        chunk_index = int(match.group(1)) if match else 1_000_000_000
+        timestamp = self.occurred_at if self.occurred_at is not None else 0
+        return (timestamp, chunk_index, self.ordinal, self.row_id)
 
 
 class MemoryDatabase:
