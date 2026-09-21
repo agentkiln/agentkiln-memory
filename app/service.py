@@ -121,6 +121,7 @@ class MemoryService:
         candidates = self._expand_neighbors(request.user_id, candidates)
         if not candidates:
             return []
+        candidates = self._suppress_superseded(candidates)
 
         intent = plan.intent if plan.intent != "none" else temporal_intent(request.query)
         ordered = self._rank(
@@ -172,6 +173,28 @@ class MemoryService:
         if len(self._cache) > 512:
             self._cache.pop(next(iter(self._cache)))
 
+    @staticmethod
+    def _suppress_superseded(candidates: list[MemoryRow]) -> list[MemoryRow]:
+        """Demote older memories that a later correction in the same concept clearly supersedes."""
+        corrections = [row for row in candidates if has_update_marker(row.content)]
+        if not corrections:
+            return candidates
+        superseded_ids: set[str] = set()
+        for newer in corrections:
+            newer_terms = set(lexical_terms(newer.content, limit=96))
+            if not newer_terms:
+                continue
+            for older in candidates:
+                if older.id == newer.id:
+                    continue
+                if newer.occurred_at is not None and older.occurred_at is not None and older.occurred_at >= newer.occurred_at:
+                    continue
+                older_terms = set(lexical_terms(older.content, limit=96))
+                if older_terms and len(newer_terms & older_terms) / len(newer_terms) >= 0.6:
+                    superseded_ids.add(older.id)
+        if not superseded_ids:
+            return candidates
+        return [row for row in candidates if row.id not in superseded_ids]
     @staticmethod
     def _fuse(lexical: list[MemoryRow], vector: list[MemoryRow]) -> list[MemoryRow]:
         scores: dict[str, float] = defaultdict(float)
