@@ -102,6 +102,9 @@ class MemoryDatabase:
                 CREATE INDEX IF NOT EXISTS idx_embeddings_user
                     ON embeddings(user_id);
 
+                CREATE INDEX IF NOT EXISTS idx_embeddings_user_model_dimensions
+                    ON embeddings(user_id, model, dimensions);
+
                 CREATE TABLE IF NOT EXISTS user_revisions (
                     user_id TEXT PRIMARY KEY,
                     revision INTEGER NOT NULL

@@ -475,3 +475,20 @@ def test_implicit_recency_prefers_newer_state_when_dates_are_available(tmp_path:
         json={"query": "Who is my backup contact?", "user_id": "recency-user", "top_k": 1},
     ).json()["data"][0]
     assert "Bob" in result["content"]
+
+
+def test_vector_index_filter_columns_exist(tmp_path: Path) -> None:
+    configured = settings(tmp_path)
+    client = TestClient(create_app(configured))
+    assert client.post("/add", json=add_payload()).status_code == 200
+    import sqlite3
+
+    connection = sqlite3.connect(configured.database_path)
+    try:
+        indexes = {
+            row[1]
+            for row in connection.execute("PRAGMA index_list(embeddings)").fetchall()
+        }
+    finally:
+        connection.close()
+    assert "idx_embeddings_user_model_dimensions" in indexes
