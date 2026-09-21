@@ -39,6 +39,7 @@ The linked competition page states:
 | CJK packing | Covered | Oversized CJK evidence is truncated within its budget. |
 | Output robustness | Complete | Unknown packed source IDs are skipped instead of failing the request. |
 | Anchor integrity | Complete | Packed windows never return an anchor ID that is absent from their content. |
+| Neighbor retention | Complete | Unique neighbor evidence is kept even when its anchor was already returned. |
 | Token budgeting | Complete | CJK characters are counted separately to avoid under-budgeting Chinese evidence. |
 | Concurrent chunk order | Complete | Source windows use chunk index, timestamp, and ordinal together. |
 | Chunk ordering | Complete | Chunk index sorts before timestamps so concurrent chunks keep source order. |
