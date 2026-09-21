@@ -32,3 +32,9 @@ def test_public_url_rejects_embedded_credentials() -> None:
     errors: list[str] = []
     check_public_url("https://user:pass@example.com/add", "Add URL", errors)
     assert errors
+
+
+def test_public_url_rejects_query_strings() -> None:
+    errors: list[str] = []
+    check_public_url("https://example.com/add?token=secret", "Add URL", errors)
+    assert errors
