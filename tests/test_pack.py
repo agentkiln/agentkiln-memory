@@ -83,3 +83,41 @@ def test_pack_windows_truncates_oversized_cjk_source_within_budget() -> None:
     )
     assert len(packed) == 1
     assert packed[0].content.endswith("...")
+
+
+def test_pack_windows_orders_chunks_before_timestamps() -> None:
+    later_time_but_chunk_zero = MemoryRow(
+        id="mem_chunk_0",
+        row_id=2,
+        user_id="user-a",
+        session_id="session-a",
+        request_id="eval:sample:chunk-0",
+        ordinal=0,
+        role="user",
+        content="The checkpoint question is ready.",
+        occurred_at=1704067201000,
+        created_at="2024-01-01T00:00:00+00:00",
+        search_text="checkpoint",
+        fts_rank=1.0,
+    )
+    earlier_time_but_chunk_one = MemoryRow(
+        id="mem_chunk_1",
+        row_id=1,
+        user_id="user-a",
+        session_id="session-a",
+        request_id="eval:sample:chunk-1",
+        ordinal=0,
+        role="assistant",
+        content="The answer is zebra.",
+        occurred_at=1704067200000,
+        created_at="2024-01-01T00:00:00+00:00",
+        search_text="answer",
+        fts_rank=1.0,
+    )
+    packed = pack_windows(
+        [(0.9, later_time_but_chunk_zero, [later_time_but_chunk_zero, earlier_time_but_chunk_one])],
+        top_k=1,
+        max_tokens=100,
+        max_items=1,
+    )
+    assert packed[0].source_ids == ("mem_chunk_0", "mem_chunk_1")
