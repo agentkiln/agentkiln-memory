@@ -19,9 +19,24 @@ def check_public_url(value: str, name: str, errors: list[str]) -> None:
     if parsed.scheme != "https" or not parsed.netloc:
         errors.append(f"{name} must be an HTTPS URL")
         return
+    if parsed.username or parsed.password:
+        errors.append(f"{name} must not contain embedded credentials")
+        return
     host = parsed.hostname or ""
-    if host in {"localhost", "127.0.0.1", "::1"} or host.endswith(".local"):
+    if (
+        host in {"localhost", "127.0.0.1", "::1"}
+        or host.endswith(".local")
+        or host.startswith("10.")
+        or host.startswith("192.168.")
+        or host.startswith("169.254.")
+    ):
         errors.append(f"{name} must not use a local or private host")
+        return
+    octets = host.split(".")
+    if len(octets) == 4 and all(part.isdigit() for part in octets):
+        first, second = int(octets[0]), int(octets[1])
+        if first == 172 and 16 <= second <= 31:
+            errors.append(f"{name} must not use a private IPv4 address")
 
 
 def check_repository(root: Path, errors: list[str]) -> dict[str, object]:
