@@ -82,3 +82,23 @@ def test_retry_after_accepts_numeric_seconds(tmp_path: Path) -> None:
         fp=None,
     )
     assert llm._retry_delay(error, attempt=0) == 5.0
+
+
+def test_embedding_vectors_are_checked_for_consistency(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    with patch.object(
+        MemoryLLM,
+        "_post",
+        return_value={
+            "data": [
+                {"index": 0, "embedding": [1.0, 0.0]},
+                {"index": 1, "embedding": [0.0]},
+            ]
+        },
+    ):
+        try:
+            llm.embed_texts(["one", "two"])
+        except Exception as exc:
+            assert "dimension" in str(exc).lower()
+        else:
+            raise AssertionError("expected inconsistent dimensions to fail")
