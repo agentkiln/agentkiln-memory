@@ -41,6 +41,7 @@ The linked competition page states:
 | HTTPS edge | Complete | Caddy example for a public TLS endpoint. |
 | Contract verification | Complete | Public smoke and operational contract checks. |
 | Release verification | Complete | Checks deadlines, clean commit, public HTTPS URLs, and required submission material. |
+| URL safety | Complete | Release checks reject credentials, loopback, link-local, and private IPv4 endpoints. |
 | Recovery verification | Complete | Restart script verifies committed evidence is searchable again. |
 | Privacy scan | Complete | CI blocks tracked databases, keys, tokens, credentials, and logs. |
 | Formal model verification | Not run | Requires a runtime credential and paid model access. |
