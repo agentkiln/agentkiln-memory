@@ -40,6 +40,7 @@ The linked competition page states:
 | Cache integrity | Complete | Search cache keys include the full retrieval configuration. |
 | Temporal intent | Complete | Latest/earliest scoring and correction-aware selection. |
 | Offline evaluation | Complete | JSONL retrieval panel reports hit rate and latency. |
+| Evidence matching | Complete | Offline evaluation accepts evidence IDs or evidence text. |
 | Docker deployment | Complete | Dockerfile, Compose file, persistent volume, health check, and non-root user. |
 | Production guard | Complete | Production startup requires competition mode, strong API-key auth, model credentials, and an HTTPS model endpoint. |
 | HTTPS edge | Complete | Caddy example for a public TLS endpoint. |

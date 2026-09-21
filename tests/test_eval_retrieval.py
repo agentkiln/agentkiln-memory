@@ -21,3 +21,19 @@ def test_evaluate_retrieval_persists_memory_between_connections(tmp_path: Path) 
     assert report["scored_questions"] == 1
     assert report["hit_count"] == 0
 
+
+def test_evaluate_retrieval_matches_evidence_text(tmp_path: Path) -> None:
+    dataset = tmp_path / "panel.jsonl"
+    dataset.write_text(
+        json.dumps(
+            {
+                "memory": ["My favorite drink is jasmine tea."],
+                "question": "What drink do I prefer?",
+                "evidence": ["jasmine tea"],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    report = evaluate(dataset, top_k=5, limit=1)
+    assert report["hit_count"] == 1
