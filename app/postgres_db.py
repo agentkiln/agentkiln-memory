@@ -140,7 +140,7 @@ class PostgresMemoryDatabase:
                     return
                 cursor.execute(
                     "INSERT INTO requests (user_id, request_id, session_id, payload_hash, created_at) "
-                    "VALUES (%s, %s, %s, %s, %s)",
+                    "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (user_id, request_id) DO NOTHING",
                     (
                         request.user_id,
                         request.request_id,
@@ -149,6 +149,21 @@ class PostgresMemoryDatabase:
                         created_at,
                     ),
                 )
+                if cursor.rowcount == 0:
+                    cursor.execute(
+                        "SELECT session_id, payload_hash FROM requests "
+                        "WHERE user_id = %s AND request_id = %s",
+                        (request.user_id, request.request_id),
+                    )
+                    concurrent = cursor.fetchone()
+                    if concurrent is None:
+                        raise RuntimeError("request row disappeared during concurrent add")
+                    if (
+                        concurrent[0] != request.session_id
+                        or concurrent[1] != request.payload_hash()
+                    ):
+                        raise ValueError("request_id was already used with a different payload")
+                    return
                 for ordinal, message in enumerate(request.messages):
                     vector = embeddings[ordinal]
                     if not vector or not all(math.isfinite(value) for value in vector):
@@ -223,7 +238,7 @@ class PostgresMemoryDatabase:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT m.id, m.ctid::text, m.user_id, m.session_id, m.request_id, m.ordinal,
+                    SELECT m.id, m.user_id, m.session_id, m.request_id, m.ordinal,
                            m.role, m.content, m.occurred_at, m.created_at, m.search_text,
                            ts_rank(
                                to_tsvector('simple', coalesce(m.content, '') || ' ' || coalesce(m.search_text, '')),
@@ -239,7 +254,10 @@ class PostgresMemoryDatabase:
                     (tsquery, user_id, tsquery, limit),
                 )
                 rows = cursor.fetchall()
-        return [self._memory_row((*row[:1], 0, *row[2:])) for row in rows]
+        return [
+            self._memory_row((row[0], 0, row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]))
+            for row in rows
+        ]
 
     def vector_search(
         self,
