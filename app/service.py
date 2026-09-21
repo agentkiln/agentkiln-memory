@@ -1,0 +1,236 @@
+from __future__ import annotations
+
+import threading
+from collections import defaultdict
+
+from .config import Settings
+from .db import MemoryDatabase, MemoryRow
+from .llm import MemoryLLM
+from .pack import pack_windows
+from .schemas import AddRequest, SearchItem, SearchRequest
+from .text import (
+    coverage,
+    fts_query,
+    has_update_marker,
+    lexical_overlap,
+    lexical_terms,
+    phrase_bonus,
+    semantic_terms,
+    temporal_intent,
+)
+
+
+class MemoryService:
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.database = MemoryDatabase(settings.database_path)
+        self.llm = MemoryLLM(settings)
+        self._cache: dict[tuple[object, ...], list[SearchItem]] = {}
+        self._cache_lock = threading.Lock()
+        self._search_slots = threading.BoundedSemaphore(value=settings.search_concurrency)
+        self._add_slots = threading.BoundedSemaphore(value=settings.add_concurrency)
+
+    def initialize(self) -> None:
+        self.database.initialize()
+
+    def add(self, request: AddRequest) -> None:
+        with self._add_slots:
+            self._add_unlocked(request)
+
+    def _add_unlocked(self, request: AddRequest) -> None:
+        status = self.database.request_status(request)
+        if status == "existing":
+            return
+        if status == "conflict":
+            raise ValueError("request_id was already used with a different payload")
+        annotations = self.llm.annotate_messages(request.messages)
+        embeddings = self.llm.embed_texts([message.content for message in request.messages])
+        self.database.add(request, annotations, embeddings, self.settings.embedding_model)
+
+    def search(self, request: SearchRequest) -> list[SearchItem]:
+        with self._search_slots:
+            return self._search_unlocked(request)
+
+    def _search_unlocked(self, request: SearchRequest) -> list[SearchItem]:
+        revision = self.database.revision(request.user_id)
+        cache_key = (
+            "v1",
+            request.user_id,
+            request.query,
+            tuple(request.options or ()),
+            request.top_k,
+            revision,
+            self.settings.llm_mode,
+            self.settings.openai_model,
+            self.settings.embedding_model,
+            self.settings.candidate_limit,
+            self.settings.max_output_tokens,
+            self.settings.max_output_items,
+            self.settings.vector_min_similarity,
+            self.settings.vector_only_min_similarity,
+            self.settings.search_concurrency,
+        )
+        with self._cache_lock:
+            cached = self._cache.get(cache_key)
+        if cached is not None:
+            return [item.model_copy() for item in cached]
+
+        plan = self.llm.analyze_query(request.query, request.options)
+        query_text = " ".join(
+            [request.query]
+            + (request.options or [])
+            + plan.terms
+            + plan.facets
+            + semantic_terms(request.query, limit=96)
+        )
+        query_terms = lexical_terms(query_text, limit=160)
+        query = fts_query(query_terms)
+        lexical_rows = self.database.lexical_search(
+            request.user_id,
+            query,
+            self.settings.candidate_limit,
+        )
+        query_vector = self.llm.embed_texts([request.query])[0]
+        vector_rows = self.database.vector_search(
+            request.user_id,
+            query_vector,
+            self.settings.candidate_limit,
+            self.settings.embedding_model,
+            minimum_similarity=(
+                self.settings.vector_min_similarity
+                if lexical_rows
+                else self.settings.vector_only_min_similarity
+            ),
+        )
+        candidates = self._fuse(lexical_rows, vector_rows)
+        if lexical_rows:
+            allowed = {row.id for row in lexical_rows}
+            allowed.update(
+                row.id
+                for row in vector_rows
+                if lexical_overlap(query_terms, row.content, row.search_text)
+            )
+            candidates = [row for row in candidates if row.id in allowed]
+        elif not vector_rows:
+            return []
+        candidates = self._expand_neighbors(request.user_id, candidates)
+        if not candidates:
+            return []
+
+        intent = plan.intent if plan.intent != "none" else temporal_intent(request.query)
+        ordered = self._rank(
+            request.query,
+            request.options or [],
+            candidates,
+            intent,
+            query_terms,
+            plan.terms + plan.facets,
+        )
+        windows = self._windows(request.user_id, ordered)
+        packed = pack_windows(
+            windows,
+            top_k=request.top_k,
+            max_tokens=self.settings.max_output_tokens,
+            max_items=self.settings.max_output_items,
+        )
+        output = [
+            SearchItem(
+                id=window.source_id,
+                content=window.content,
+                score=round(max(0.0, min(1.0, window.score)), 6),
+                created_at=next(row.created_at for row in candidates if row.id == window.source_id),
+            )
+            for window in packed
+        ]
+        with self._cache_lock:
+            self._store_cache(cache_key, output)
+        return [item.model_copy() for item in output]
+
+    def _store_cache(self, cache_key: tuple[object, ...], output: list[SearchItem]) -> None:
+        self._cache[cache_key] = [item.model_copy() for item in output]
+        if len(self._cache) > 512:
+            self._cache.pop(next(iter(self._cache)))
+
+    @staticmethod
+    def _fuse(lexical: list[MemoryRow], vector: list[MemoryRow]) -> list[MemoryRow]:
+        scores: dict[str, float] = defaultdict(float)
+        rows: dict[str, MemoryRow] = {}
+        for ranked in (lexical, vector):
+            for index, row in enumerate(ranked):
+                rows.setdefault(row.id, row)
+                scores[row.id] += 1.0 / (60 + index + 1)
+        return [rows[row_id] for row_id, _score in sorted(scores.items(), key=lambda item: item[1], reverse=True)]
+
+    def _expand_neighbors(self, user_id: str, candidates: list[MemoryRow]) -> list[MemoryRow]:
+        if not candidates:
+            return []
+        seen = {row.id for row in candidates}
+        output = list(candidates)
+        for row, _distance, seed_rank in self.database.neighbors(user_id, [item.id for item in candidates[:24]], radius=1):
+            if row.id not in seen:
+                output.append(row)
+                seen.add(row.id)
+        return output
+
+    def _rank(
+        self,
+        query: str,
+        options: list[str],
+        candidates: list[MemoryRow],
+        intent: str,
+        query_terms: list[str],
+        expanded_terms: list[str],
+    ) -> list[tuple[float, MemoryRow]]:
+        terms = set(query_terms)
+        expansion = set(lexical_terms(" ".join(expanded_terms), limit=128)) - terms
+        option_terms = set(lexical_terms(" ".join(options), limit=64))
+        timestamps = [row.occurred_at for row in candidates if row.occurred_at is not None]
+        minimum = min(timestamps) if timestamps else 0
+        maximum = max(timestamps) if timestamps else 0
+        ranked: list[tuple[float, MemoryRow]] = []
+        for index, row in enumerate(candidates):
+            values = [row.content, row.search_text]
+            time_score = 0.0
+            if row.occurred_at is not None and maximum > minimum:
+                ratio = (row.occurred_at - minimum) / (maximum - minimum)
+                if intent == "latest":
+                    time_score = 0.12 * ratio
+                elif intent == "earliest":
+                    time_score = 0.12 * (1.0 - ratio)
+            if intent == "latest" and has_update_marker(row.content):
+                time_score += 0.05
+            score = (
+                0.42 * coverage(terms, values)
+                + 0.18 * (1.0 / (1.0 + index))
+                + 0.14 * coverage(expansion, values)
+                + 0.10 * coverage(option_terms, values)
+                + 0.08 * phrase_bonus(query, row.content)
+                + time_score
+            )
+            ranked.append((score, row))
+        ranked.sort(key=lambda item: (item[0], item[1].occurred_at or 0), reverse=True)
+        return ranked
+
+    def _windows(
+        self,
+        user_id: str,
+        ranked: list[tuple[float, MemoryRow]],
+    ) -> list[tuple[float, MemoryRow, list[MemoryRow]]]:
+        selected = ranked[: self.settings.max_output_items]
+        window_map: dict[str, list[MemoryRow]] = {}
+        for seed_rank, (_score, row) in enumerate(selected):
+            for context_row, _distance, _seed_rank in self.database.neighbors(user_id, [row.id], radius=1):
+                window_map.setdefault(row.id, [])
+                if all(existing.id != context_row.id for existing in window_map[row.id]):
+                    window_map[row.id].append(context_row)
+        return [
+            (
+                score,
+                row,
+                sorted(
+                    window_map.get(row.id) or [row],
+                    key=lambda item: (item.occurred_at or 0, item.ordinal, item.row_id),
+                ),
+            )
+            for score, row in selected
+        ]

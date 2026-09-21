@@ -1,0 +1,18 @@
+{
+  "system_name": "AgentKiln Memory",
+  "version": "1.0.0",
+  "track": "textual",
+  "division": "open_source_methods",
+  "llm_mode": "competition",
+  "openai_model": "gpt-4o-mini",
+  "embedding_model": "text-embedding-v4",
+  "candidate_limit": 300,
+  "max_output_tokens": 8000,
+  "max_output_items": 24,
+  "vector_min_similarity": 0.35,
+  "vector_only_min_similarity": 0.65,
+  "search_concurrency": 32,
+  "add_concurrency": 16,
+  "authentication": "bearer_or_x_api_key",
+  "notes": "Replace placeholder endpoints and contact information before submission."
+}

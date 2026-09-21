@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest --cov=app --cov-report=term-missing
+      - run: python scripts/privacy_scan.py --root .
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    env:
+      AML_API_KEY: ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t agentkiln-memory:ci .
+      - run: docker run -d --name agentkiln -p 8000:8000 -e AML_LLM_MODE=off -e AML_API_KEY="$AML_API_KEY" agentkiln-memory:ci
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 30); do
+            if python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs agentkiln
+          exit 1
+      - run: python scripts/smoke.py
