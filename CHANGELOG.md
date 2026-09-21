@@ -2,6 +2,8 @@
 
 ## 1.1.0
 
+- Rebalanced ranking weights toward temporal signals and added correction-based suppression of superseded memories.
+- Included the rerank configuration in the Search cache key.
 - Added the optional reranker with `RERANK_MODEL`, `RERANK_BASE_URL`, and `RERANK_API_KEY`; rerank failures fall back to rule-based ranking.
 - Added the PostgreSQL backend with GIN full-text indexes and CJK substring search.
 - Added the PandaStack deployment guide with Managed PostgreSQL.
