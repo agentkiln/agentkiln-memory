@@ -127,6 +127,7 @@ python scripts/release_check.py \
 | Variable | Default | Purpose |
 |---|---|---|
 | `AML_DATABASE_PATH` | `data/memory.db` | SQLite database path |
+| `DATABASE_URL` | empty | PostgreSQL URL; when set, the PostgreSQL backend is used |
 | `AML_PRODUCTION` | empty | Set to `1` to require competition mode and API-key auth |
 | `AML_LLM_MODE` | `off` | `off`, `dev_mock`, or `competition` |
 | `AML_API_KEY` | empty | Optional Add/Search authentication |
@@ -150,6 +151,10 @@ python scripts/release_check.py \
 - The service does not log request bodies or credentials.
 - All memories are retrieved only through the exact submitted `user_id`.
 - Delete the evaluation database or Docker volume within 30 days after the run unless written organizer permission says otherwise.
+
+## PandaStack Deployment
+
+See [deploy/PandaStack.md](deploy/PandaStack.md). The `PandaStack` branch runs FastAPI on PandaStack Apps with Managed PostgreSQL. Local development still uses SQLite when `DATABASE_URL` is not set.
 
 ## License
 
