@@ -22,6 +22,9 @@ def check_public_url(value: str, name: str, errors: list[str]) -> None:
     if parsed.username or parsed.password:
         errors.append(f"{name} must not contain embedded credentials")
         return
+    if parsed.query or parsed.fragment:
+        errors.append(f"{name} must not contain query strings or fragments")
+        return
     host = parsed.hostname or ""
     if (
         host in {"localhost", "127.0.0.1", "::1"}
