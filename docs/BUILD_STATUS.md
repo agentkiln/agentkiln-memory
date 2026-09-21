@@ -17,6 +17,7 @@ The linked competition page states:
 |---|---|---|
 | Repository | Complete | AgentKiln Memory project sources and deployment files. |
 | Add/Search API | Complete | Synchronous contracts, aliases, validation, idempotency, and conflict handling. |
+| Input bounds | Complete | Identifier fields reject values longer than 512 characters. |
 | User isolation | Complete | Exact `user_id` filtering for lexical, vector, and neighbor retrieval. |
 | Persistence | Complete | SQLite WAL storage with request deduplication and restart tests. |
 | Retry efficiency | Complete | Identical Add retries return before model or embedding calls. |
