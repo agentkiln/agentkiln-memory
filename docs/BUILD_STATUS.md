@@ -16,6 +16,9 @@ The linked competition page states:
 | Area | Status | Notes |
 |---|---|---|
 | Repository | Complete | AgentKiln Memory project sources and deployment files. |
+| Database backends | Complete | SQLite for local development; PostgreSQL on the PandaStack branch. |
+| PostgreSQL schema | Complete | `scripts/init_postgres.py` creates tables with GIN full-text indexes. |
+| PandaStack deployment | Prepared | App start command uses `$PORT`; see `deploy/PandaStack.md`. |
 | Add/Search API | Complete | Synchronous contracts, aliases, validation, idempotency, and conflict handling. |
 | Input bounds | Complete | Identifier fields reject values longer than 512 characters. |
 | Search bounds | Complete | Query, option count, and option length are bounded. |
