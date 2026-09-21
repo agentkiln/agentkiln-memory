@@ -30,7 +30,7 @@ Command:
 pytest -q
 ```
 
-Result: 50 tests passed using the existing local Python environment.
+Result: 51 tests passed using the existing local Python environment.
 
 Command:
 
