@@ -14,9 +14,17 @@ jobs:
     steps:
       - name: Trigger PandaStack deploy
         run: |
+          token="$(printf '%s' "${{ secrets.PANDASTACK_API_KEY }}" | tr -d '\r\n')"
+          token="${token#Bearer }"
+          token="${token#bearer }"
+          if [ -z "$token" ]; then
+            echo "PANDASTACK_API_KEY is empty"
+            exit 1
+          fi
+
           curl --fail-with-body \
             -X POST \
             "https://api.pandastack.ai/v1/apps/22cd4bb2-6b89-46cc-9a61-909da19eb89c/deploys" \
-            -H "Authorization: Bearer ${{ secrets.PANDASTACK_API_KEY }}" \
+            -H "Authorization: Bearer $token" \
             -H "Content-Type: application/json" \
             -d '{}'
