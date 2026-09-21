@@ -1,4 +1,4 @@
-from app.postgres_db import SCHEMA_SQL, to_tsquery
+from app.postgres_schema import SCHEMA_SQL, to_tsquery
 
 
 def test_to_tsquery_converts_quoted_or_terms() -> None:

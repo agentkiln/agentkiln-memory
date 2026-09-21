@@ -3,82 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import re
 from datetime import datetime, timezone
 
 from .db import MemoryRow
+from .postgres_schema import SCHEMA_SQL, to_tsquery
 from .schemas import AddRequest
 from .text import lexical_terms
-
-
-QUOTED_TERM_RE = re.compile(r'"((?:[^"]|"")*)"')
-
-
-def to_tsquery(query: str) -> str:
-    """Convert an FTS5-style quoted OR query into a safe PostgreSQL tsquery."""
-    terms: list[str] = []
-    for match in QUOTED_TERM_RE.finditer(query):
-        term = match.group(1).replace('""', '"').strip()
-        cleaned = re.sub(r"[^\w\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+", "", term)
-        if not cleaned:
-            continue
-        if cleaned.isascii():
-            terms.append(f"{cleaned}:*")
-        else:
-            terms.append(cleaned)
-    if not terms:
-        return ""
-    return " | ".join(terms[:200])
-
-
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS requests (
-    user_id TEXT NOT NULL,
-    request_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    payload_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (user_id, request_id)
-);
-
-CREATE TABLE IF NOT EXISTS memories (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    request_id TEXT NOT NULL,
-    ordinal INTEGER NOT NULL,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    occurred_at BIGINT,
-    created_at TEXT NOT NULL,
-    search_text TEXT NOT NULL,
-    UNIQUE (user_id, request_id, ordinal)
-);
-
-CREATE INDEX IF NOT EXISTS idx_memories_user_time
-    ON memories (user_id, occurred_at, ordinal);
-
-CREATE INDEX IF NOT EXISTS idx_memories_fts
-    ON memories USING GIN (
-        to_tsvector('simple', coalesce(content, '') || ' ' || coalesce(search_text, ''))
-    );
-
-CREATE TABLE IF NOT EXISTS embeddings (
-    memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,
-    model TEXT NOT NULL,
-    dimensions INTEGER NOT NULL,
-    vector_json TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_embeddings_user_model_dimensions
-    ON embeddings (user_id, model, dimensions);
-
-CREATE TABLE IF NOT EXISTS user_revisions (
-    user_id TEXT PRIMARY KEY,
-    revision INTEGER NOT NULL
-);
-"""
 
 
 class PostgresMemoryDatabase:
@@ -129,16 +59,6 @@ class PostgresMemoryDatabase:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT session_id, payload_hash FROM requests "
-                    "WHERE user_id = %s AND request_id = %s FOR UPDATE",
-                    (request.user_id, request.request_id),
-                )
-                existing = cursor.fetchone()
-                if existing is not None:
-                    if existing[0] != request.session_id or existing[1] != request.payload_hash():
-                        raise ValueError("request_id was already used with a different payload")
-                    return
-                cursor.execute(
                     "INSERT INTO requests (user_id, request_id, session_id, payload_hash, created_at) "
                     "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (user_id, request_id) DO NOTHING",
                     (
@@ -155,12 +75,12 @@ class PostgresMemoryDatabase:
                         "WHERE user_id = %s AND request_id = %s",
                         (request.user_id, request.request_id),
                     )
-                    concurrent = cursor.fetchone()
-                    if concurrent is None:
+                    existing = cursor.fetchone()
+                    if existing is None:
                         raise RuntimeError("request row disappeared during concurrent add")
                     if (
-                        concurrent[0] != request.session_id
-                        or concurrent[1] != request.payload_hash()
+                        existing[0] != request.session_id
+                        or existing[1] != request.payload_hash()
                     ):
                         raise ValueError("request_id was already used with a different payload")
                     return
@@ -213,23 +133,6 @@ class PostgresMemoryDatabase:
                     (request.user_id,),
                 )
 
-    @staticmethod
-    def _memory_row(raw: tuple) -> MemoryRow:
-        return MemoryRow(
-            id=raw[0],
-            row_id=int(raw[1]),
-            user_id=raw[2],
-            session_id=raw[3],
-            request_id=raw[4],
-            ordinal=int(raw[5]),
-            role=raw[6],
-            content=raw[7],
-            occurred_at=raw[8],
-            created_at=raw[9],
-            search_text=raw[10],
-            fts_rank=float(raw[11]) if raw[11] is not None else 1_000.0,
-        )
-
     def lexical_search(self, user_id: str, query: str, limit: int) -> list[MemoryRow]:
         tsquery = to_tsquery(query)
         if not tsquery:
@@ -255,7 +158,20 @@ class PostgresMemoryDatabase:
                 )
                 rows = cursor.fetchall()
         return [
-            self._memory_row((row[0], 0, row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]))
+            MemoryRow(
+                id=row[0],
+                row_id=0,
+                user_id=row[1],
+                session_id=row[2],
+                request_id=row[3],
+                ordinal=int(row[4]),
+                role=row[5],
+                content=row[6],
+                occurred_at=row[7],
+                created_at=row[8],
+                search_text=row[9],
+                fts_rank=float(row[10]) if row[10] is not None else 1_000.0,
+            )
             for row in rows
         ]
 
