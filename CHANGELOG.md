@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Added the optional reranker with `RERANK_MODEL`, `RERANK_BASE_URL`, and `RERANK_API_KEY`; rerank failures fall back to rule-based ranking.
+- Added the PostgreSQL backend with GIN full-text indexes and CJK substring search.
+- Added the PandaStack deployment guide with Managed PostgreSQL.
+- Added the technical report, centered logo, English and Chinese README, CI and deployment badges.
+- Removed the invalid job-level `secrets` condition from the deploy workflow.
+
 ## 1.0.0 - initial release
 
 - Added the FastAPI Add/Search service.

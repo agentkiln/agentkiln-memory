@@ -51,7 +51,12 @@ OPENAI_API_KEY=<runtime credential>
 AML_PRODUCTION=1
 AML_LLM_MODE=competition
 OPENAI_MODEL=gpt-4o-mini
-OPENAI_EMBEDDING_MODEL=text-embedding-v4
+OPENAI_EMBEDDING_MODEL=<configured embedding model>
+OPENAI_EMBEDDING_BASE_URL=<optional separate embedding endpoint>
+OPENAI_EMBEDDING_API_KEY=<optional separate embedding credential>
+RERANK_MODEL=<optional reranker model; empty disables reranking>
+RERANK_BASE_URL=<optional separate reranker endpoint>
+RERANK_API_KEY=<optional separate reranker credential>
 ```
 
 The embedding endpoint reuses `OPENAI_BASE_URL` and `OPENAI_API_KEY` unless you set `OPENAI_EMBEDDING_BASE_URL` and `OPENAI_EMBEDDING_API_KEY`, so chat and embeddings can come from different OpenAI-compatible providers.

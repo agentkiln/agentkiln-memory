@@ -7,44 +7,44 @@ Complete the personal contact fields before submitting. Do not include secrets i
 - Evaluation type: textual retrieval
 - Participant division: Open-source Methods
 - System name: AgentKiln Memory
-- Version: 1.0.0
+- Version: 1.1.0
 - GitHub repository: add the public repository URL after publishing
 - License: MIT
 
 ## Short method description
 
-AgentKiln Memory is an evidence-only long-term memory service. It persists source messages under a strict `user_id` boundary, indexes them with SQLite FTS5 and deterministic lexical features, adds a vector retrieval channel with mock or configured embeddings, fuses candidates by reciprocal rank, expands adjacent source turns within the same session, and returns token-bounded verbatim evidence windows. Temporal intent scoring supports current and earliest questions without generating final answers. Add is synchronous and idempotent; Search never generates the final answer.
+AgentKiln Memory is an evidence-only long-term memory service. It persists source messages under a strict `user_id` boundary, indexes them with SQLite FTS5 and PostgreSQL GIN full-text search, adds a vector retrieval channel with configured embeddings, fuses candidates by reciprocal rank, expands adjacent source turns within the same session, and returns token-bounded verbatim evidence windows. Temporal intent scoring supports latest and earliest questions without generating final answers. An optional external reranker can reorder candidates with automatic fallback to rule-based ranking. Add is synchronous and idempotent; Search never generates the final answer.
 
 ## Public endpoints
 
 - Health: `GET https://your-domain.example/health`
 - Add: `POST https://your-domain.example/add`
 - Search: `POST https://your-domain.example/search`
-- Authentication: Bearer token or `X-Api-Key` with the submitted system credential
+- Authentication: Bearer token, `Token`, or `X-Api-Key` with the submitted system credential
 
 ## Deployment summary
 
-- Docker image: `agentkiln-memory:1.0.0`
-- Persistent path: `/data/memory.db`
-- One Uvicorn worker; SQLite WAL and a 60-second busy timeout handle concurrent requests.
+- Managed PostgreSQL on PandaStack; the service creates its schema on startup.
+- FastAPI with Uvicorn; SQLite WAL is used for local development only.
 - Runtime model mode: `competition`
-- LLM: `gpt-4o-mini`
-- Embedding model: `text-embedding-v4`
+- LLM: `gpt-4o-mini` (via OpenAI-compatible endpoint)
+- Embedding model: configured through `OPENAI_EMBEDDING_MODEL`
+- Optional reranker: configured through `RERANK_MODEL`; falls back to rule-based ranking when unavailable
 - Search evidence budget: 8,000 tokens by default; 24 returned windows by default.
 - In-process concurrency limits: Add 16, Search 32.
 - Add returns only after the request is durably stored and immediately searchable.
 
 ## Capacity declaration
 
-Preliminary local target for the public endpoint:
+Preliminary target for the public endpoint:
 
-- Add concurrency: 24
+- Add concurrency: 16
 - Search concurrency: 32
 - Timeout: 90 seconds for upstream model calls
-- Persistent volume: at least 10 GB
+- Database: Managed PostgreSQL with auto-suspend
 - Container baseline: 2 vCPU, 2 GB RAM
 
-Run `scripts/ops_contract.py` and `scripts/recovery_check.py` against the deployed service, then replace this section with the measured results before applying.
+Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchronous Add calls completed in approximately 0.36 seconds, Search latency approximately 0.081 seconds. Replace this section with the measured production results after running `scripts/ops_contract.py` and `scripts/recovery_check.py`.
 
 ## Required participant additions
 
@@ -54,6 +54,7 @@ Run `scripts/ops_contract.py` and `scripts/recovery_check.py` against the deploy
 - Public repository URL
 - Public display consent choices
 - system credential delivery through the organizer's controlled request flow
+- Technical report: see `docs/TECHNICAL_REPORT.md`
 
 ## Compliance notes
 

@@ -1,12 +1,12 @@
 # Project State
 
-Updated: 2026-09-21.
+Updated: 2026-09-22.
 
 ## Current status
 
-The repository has a runnable FastAPI service with synchronous Add/Search, SQLite persistence, FTS5 lexical retrieval, mock embeddings, optional formal model calls, RRF fusion, source-window packing, strict user isolation, idempotent Add, and API-key authentication.
+The repository has a runnable FastAPI service with synchronous Add/Search, SQLite and PostgreSQL persistence, FTS5 and GIN lexical retrieval, configured embeddings, optional rerank with fallback, RRF fusion, source-window packing, strict user isolation, idempotent Add, and API-key authentication.
 
-The repository also includes Docker deployment files, a Caddy HTTPS example, public contract checks, a restart recovery check, and submission/disclosure documents.
+The repository also includes Docker deployment files, a Caddy HTTPS example, PandaStack deployment guide, public contract checks, a restart recovery check, and submission/disclosure documents.
 
 ## What is complete
 
@@ -20,6 +20,7 @@ The repository also includes Docker deployment files, a Caddy HTTPS example, pub
 - Request retries are idempotent; conflicting payloads return HTTP 409.
 - Lexical retrieval works without external model credentials in `off` and `dev_mock` modes.
 - Embeddings and optional model calls are explicit configuration, not hidden fallback behavior.
+- Optional reranker with automatic fallback to rule-based ranking.
 - Deployment and operational checks are included.
 
 ## Verified locally
@@ -30,7 +31,7 @@ Command:
 pytest -q
 ```
 
-Result: 73 tests passed using the existing local Python environment.
+Result: 76 tests passed using the existing local Python environment.
 
 Command:
 
@@ -48,12 +49,21 @@ python scripts/local_verify.py --port 8123 --concurrency 24
 
 Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.36 seconds, 13 returned evidence windows, and a measured Search latency of about 0.081 seconds in `dev_mock` mode.
 
-The local dependency install for a new virtual environment was blocked by network permissions during this session. The project itself did not require network access for the passing tests.
+## Verified on PandaStack deployment
+
+Public HTTPS deployment on PandaStack with Managed PostgreSQL has been verified:
+
+- Health endpoint returns `status: ok`, `llm_mode: competition`, and `llm_ready: true`.
+- Add successfully stores messages with real chat and embedding calls.
+- Search successfully retrieves evidence with real embedding calls.
+- Idempotent Add: identical `request_id` and payload return success without duplicate writes.
+- Conflict detection: different payload with the same `request_id` returns HTTP 409.
+- User isolation: cross-user queries return empty results.
+- Invalid credentials return HTTP 401.
+- Search latency with live embedding and rerank is approximately 4-6 seconds.
 
 ## Not yet verified
 
-- Formal `gpt-4o-mini` and `text-embedding-v4` API calls.
-- Public HTTPS deployment.
 - Platform-issued Eval Key and public Smoke.
 - Official Full evaluation.
 - Official score.
@@ -62,9 +72,9 @@ Do not report planned model use or local tests as an official competition result
 
 ## Next minimum task
 
-Provide a public host, a system credential, and a runtime model credential, then deploy the frozen `1.0.0` image and run:
+Apply for an Eval Key on the open retrieval evaluation platform page, then run:
 
 ```bash
-python scripts/ops_contract.py --base-url https://your-domain.example --api-key "$MEMORY_SYSTEM_KEY"
-python scripts/recovery_check.py --base-url http://127.0.0.1:8000 --api-key "$AML_API_KEY" --container agentkiln-memory
+python scripts/ops_contract.py --base-url https://<app-id>.pandastack.ai --api-key "$MEMORY_SYSTEM_KEY"
+python scripts/recovery_check.py --base-url https://<app-id>.pandastack.ai --api-key "$AML_API_KEY" --container agentkiln-memory
 ```
