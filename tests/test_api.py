@@ -444,3 +444,12 @@ def test_identifier_fields_reject_unbounded_values(tmp_path: Path) -> None:
     payload = add_payload()
     payload["user_id"] = "u" * 513
     assert client.post("/add", json=payload).status_code == 422
+
+
+def test_add_rejects_oversized_message_batch(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    payload = add_payload()
+    payload["messages"] = [
+        {"role": "user", "content": f"memory item {index}"} for index in range(201)
+    ]
+    assert client.post("/add", json=payload).status_code == 422
