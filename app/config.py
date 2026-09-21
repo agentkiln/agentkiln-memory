@@ -25,6 +25,7 @@ class Settings:
     vector_only_min_similarity: float
     search_concurrency: int
     add_concurrency: int
+    database_url: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -61,4 +62,5 @@ class Settings:
             vector_only_min_similarity=float(os.getenv("AML_VECTOR_ONLY_MIN_SIMILARITY", "0.65")),
             search_concurrency=max(1, min(256, int(os.getenv("AML_SEARCH_CONCURRENCY", "32")))),
             add_concurrency=max(1, min(64, int(os.getenv("AML_ADD_CONCURRENCY", "16")))),
+            database_url=(os.getenv("DATABASE_URL") or "").strip() or None,
         )

@@ -38,6 +38,8 @@ class MemoryRow:
 
 
 class MemoryDatabase:
+    backend_name = "sqlite"
+
     def __init__(self, path: Path):
         self.path = path
 
