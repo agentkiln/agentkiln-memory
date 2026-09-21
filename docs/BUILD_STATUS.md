@@ -25,6 +25,7 @@ The linked competition page states:
 | Retry efficiency | Complete | Identical Add retries return before model or embedding calls. |
 | Add atomicity | Covered | Failed writes leave no partial message rows searchable. |
 | Lexical retrieval | Complete | FTS5 with English stemming, CJK n-grams, and phrase scoring. |
+| Option handling | Complete | Options influence ranking but do not contaminate candidate retrieval. |
 | CJK candidate filtering | Complete | Two-character CJK terms participate in cross-modal candidate checks. |
 | Vector retrieval | Complete | Local mock and runtime-provider modes; RRF fusion with lexical candidates. |
 | Vector indexing | Complete | Embedding filters use a user, model, and dimension index. |

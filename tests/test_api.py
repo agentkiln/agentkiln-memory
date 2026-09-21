@@ -461,6 +461,35 @@ def test_search_rejects_oversized_query_and_options(tmp_path: Path) -> None:
         "/search",
         json={"query": "q" * 8_001, "user_id": "user-a", "top_k": 5},
     ).status_code == 422
+
+
+def test_options_do_not_override_query_evidence(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    assert client.post(
+        "/add",
+        json={
+            "request_id": "option-noise",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "timestamp": 1704067200000,
+                    "content": "The backup job runs every 12 hours.",
+                }
+            ],
+            "user_id": "option-user",
+            "session_id": "option-session",
+        },
+    ).status_code == 200
+    result = client.post(
+        "/search",
+        json={
+            "query": "How long does the access token last?",
+            "options": ["12 hours", "24 hours", "48 hours"],
+            "user_id": "option-user",
+            "top_k": 3,
+        },
+    ).json()["data"]
+    assert result == []
     assert client.post(
         "/search",
         json={

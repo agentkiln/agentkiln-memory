@@ -79,7 +79,6 @@ class MemoryService:
         plan = self.llm.analyze_query(request.query, request.options)
         query_text = " ".join(
             [request.query]
-            + (request.options or [])
             + plan.terms
             + plan.facets
             + semantic_terms(request.query, limit=96)
