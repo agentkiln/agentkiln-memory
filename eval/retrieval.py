@@ -20,6 +20,17 @@ def read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def _matches_evidence(record: dict, result) -> bool:
+    expected_ids = {str(item) for item in record.get("evidence_ids", [])}
+    if expected_ids and {item.id for item in result} & expected_ids:
+        return True
+    expected_text = [str(item) for item in record.get("evidence", [])]
+    if not expected_text:
+        return False
+    returned_text = " ".join(item.content for item in result)
+    return any(text and text in returned_text for text in expected_text)
+
+
 def evaluate(path: Path, top_k: int, limit: int | None) -> dict:
     records = read_jsonl(path)
     if limit is not None:
@@ -46,6 +57,7 @@ def evaluate(path: Path, top_k: int, limit: int | None) -> dict:
     service.initialize()
     hits = 0
     latencies: list[float] = []
+    total = 0
     for index, record in enumerate(records):
         user_id = f"eval:{index}"
         messages = [
@@ -64,14 +76,12 @@ def evaluate(path: Path, top_k: int, limit: int | None) -> dict:
         query = str(record.get("question") or record.get("query") or "")
         if not query:
             continue
+        total += 1
         started = time.perf_counter()
         result = service.search(SearchRequest(query=query, user_id=user_id, top_k=top_k))
         latencies.append(time.perf_counter() - started)
-        expected = {str(item) for item in record.get("evidence_ids", [])}
-        returned = {item.id for item in result}
-        if expected and returned & expected:
+        if _matches_evidence(record, result):
             hits += 1
-    total = sum(1 for record in records if record.get("question") or record.get("query"))
     temporary.cleanup()
     return {
         "records": len(records),
