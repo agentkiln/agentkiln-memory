@@ -7,6 +7,7 @@ from .config import Settings
 from .db import MemoryDatabase, MemoryRow
 from .llm import MemoryLLM
 from .pack import pack_windows
+from .postgres_db import PostgresMemoryDatabase
 from .schemas import AddRequest, SearchItem, SearchRequest
 from .text import (
     coverage,
@@ -23,7 +24,10 @@ from .text import (
 class MemoryService:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.database = MemoryDatabase(settings.database_path)
+        if settings.database_url:
+            self.database = PostgresMemoryDatabase(settings.database_url)
+        else:
+            self.database = MemoryDatabase(settings.database_path)
         self.llm = MemoryLLM(settings)
         self._cache: dict[tuple[object, ...], list[SearchItem]] = {}
         self._cache_lock = threading.Lock()
