@@ -28,6 +28,7 @@ The linked competition page states:
 | Provider resilience | Complete | Bounded retries honor Retry-After for transient model/network failures. |
 | Load control | Complete | Add and Search concurrency are bounded in process and configurable for capacity. |
 | Evidence output | Complete | Token-bounded, source-deduplicated conversation windows with timestamps. |
+| Output robustness | Complete | Unknown packed source IDs are skipped instead of failing the request. |
 | Token budgeting | Complete | CJK characters are counted separately to avoid under-budgeting Chinese evidence. |
 | Temporal intent | Complete | Latest/earliest scoring and correction-aware selection. |
 | Offline evaluation | Complete | JSONL retrieval panel reports hit rate and latency. |
