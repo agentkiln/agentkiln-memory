@@ -154,7 +154,9 @@ class MemoryLLM:
             except urllib.error.HTTPError as exc:
                 last_error = exc
                 if exc.code not in {429, 500, 502, 503, 504} or attempt == attempts - 1:
-                    raise LLMUnavailable(f"model request failed: HTTP {exc.code}") from exc
+                    raise LLMUnavailable(
+                        f"model request failed: HTTP {exc.code} {self._error_body(exc)}"
+                    ) from exc
                 delay = self._retry_delay(exc, attempt)
             except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
@@ -173,6 +175,14 @@ class MemoryLLM:
             except ValueError:
                 pass
         return 0.2 * (2**attempt)
+
+    @staticmethod
+    def _error_body(exc: urllib.error.HTTPError, limit: int = 400) -> str:
+        try:
+            body = exc.read().decode("utf-8", errors="replace").strip()
+        except Exception:
+            return ""
+        return body[:limit]
 
     @staticmethod
     def _decode_response(raw: bytes | str) -> dict:
