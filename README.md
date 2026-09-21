@@ -16,6 +16,8 @@
 [![Open Retrieval Benchmark](https://img.shields.io/badge/Benchmark-Textual%20Memory%20Track-8A2BE2)](https://open-retrieval-benchmark.example)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+English | [简体中文](README.zh-CN.md)
+
 **An evidence-only long-term memory service for AI agents.**
 
 AgentKiln Memory persists agent conversations under strict user isolation, indexes them with hybrid lexical and vector retrieval, and returns verbatim source evidence without generating answers. Built for the [Open Retrieval Benchmark](https://open-retrieval-benchmark.example) textual retrieval track, suitable for production agent pipelines.
