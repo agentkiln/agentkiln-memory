@@ -34,7 +34,7 @@ class MemoryRow:
         match = re.search(r"(?:^|[-_:])chunk[-_:]?(\d+)(?:$|[-_:])", self.request_id)
         chunk_index = int(match.group(1)) if match else 1_000_000_000
         timestamp = self.occurred_at if self.occurred_at is not None else 0
-        return (timestamp, chunk_index, self.ordinal, self.row_id)
+        return (chunk_index, timestamp, self.ordinal, self.row_id)
 
 
 class MemoryDatabase:
