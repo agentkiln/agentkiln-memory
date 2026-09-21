@@ -27,6 +27,9 @@ class Settings:
     vector_only_min_similarity: float
     search_concurrency: int
     add_concurrency: int
+    rerank_model: str | None = None
+    rerank_api_key: str | None = None
+    rerank_base_url: str = ""
     database_url: str | None = None
 
     @classmethod
@@ -55,6 +58,13 @@ class Settings:
         embedding_base_url = (
             os.getenv("OPENAI_EMBEDDING_BASE_URL") or base_url
         ).strip().rstrip("/")
+        rerank_model = (os.getenv("RERANK_MODEL") or "").strip() or None
+        rerank_api_key = (
+            os.getenv("RERANK_API_KEY") or embedding_api_key or ""
+        ).strip() or None
+        rerank_base_url = (
+            os.getenv("RERANK_BASE_URL") or embedding_base_url
+        ).strip().rstrip("/")
         return cls(
             database_path=Path(os.getenv("AML_DATABASE_PATH", "data/memory.db")),
             api_key=production_api_key or None,
@@ -65,6 +75,9 @@ class Settings:
             embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-v4"),
             embedding_api_key=embedding_api_key,
             embedding_base_url=embedding_base_url,
+            rerank_model=rerank_model,
+            rerank_api_key=rerank_api_key,
+            rerank_base_url=rerank_base_url,
             timeout_seconds=float(os.getenv("AML_TIMEOUT_SECONDS", "90")),
             candidate_limit=max(40, min(2000, int(os.getenv("AML_CANDIDATE_LIMIT", "300")))),
             max_output_tokens=max(1000, int(os.getenv("AML_MAX_OUTPUT_TOKENS", "8000"))),

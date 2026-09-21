@@ -35,6 +35,38 @@ class MemoryLLM:
         if self.settings.llm_mode == "competition" and not self.settings.openai_api_key:
             raise LLMUnavailable("OPENAI_API_KEY is required in competition mode")
 
+    def rerank(self, query: str, documents: list[str]) -> list[float] | None:
+        """Return relevance scores aligned with documents, or None when rerank is unavailable."""
+        if not self.settings.rerank_model or not self.settings.rerank_api_key:
+            return None
+        if not documents:
+            return []
+        payload = {"model": self.settings.rerank_model, "query": query, "documents": documents}
+        try:
+            body = self._post(
+                "/rerank",
+                payload,
+                base_url=self.settings.rerank_base_url,
+                api_key=self.settings.rerank_api_key,
+            )
+        except LLMUnavailable:
+            return None
+        results = body.get("results") if isinstance(body, dict) else None
+        if not isinstance(results, list):
+            return None
+        scores: list[float | None] = [None] * len(documents)
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("index")
+            score = item.get("relevance_score", item.get("score"))
+            if not isinstance(index, int) or not (0 <= index < len(documents)):
+                continue
+            if isinstance(score, (int, float)):
+                scores[index] = float(score)
+        if any(value is None for value in scores):
+            return None
+        return [float(value) for value in scores]
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         self._require_competition_key()
         if self.settings.llm_mode != "competition" or not self.settings.embedding_api_key:

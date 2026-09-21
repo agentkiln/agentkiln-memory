@@ -130,6 +130,20 @@ class MemoryService:
             query_terms,
             plan.terms + plan.facets,
         )
+        rerank_scores = self.llm.rerank(
+            request.query,
+            [row.content for row in candidates],
+        )
+        if rerank_scores is not None:
+            candidates = [
+                row
+                for _row, score in sorted(
+                    zip(candidates, rerank_scores),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+                for row in [_row]
+            ]
         windows = self._windows(request.user_id, ordered)
         packed = pack_windows(
             windows,
