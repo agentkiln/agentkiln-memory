@@ -85,7 +85,7 @@ def test_pack_windows_truncates_oversized_cjk_source_within_budget() -> None:
     assert packed[0].content.endswith("...")
 
 
-def test_pack_windows_does_not_return_seen_anchor_without_its_content() -> None:
+def test_pack_windows_does_not_repeat_seen_anchor_content() -> None:
     anchor = row("mem_anchor", "anchor content")
     first_neighbor = row("mem_first", "first neighbor", ordinal=1)
     later_neighbor = row("mem_later", "later neighbor", ordinal=2)
@@ -98,7 +98,29 @@ def test_pack_windows_does_not_return_seen_anchor_without_its_content() -> None:
         max_tokens=200,
         max_items=3,
     )
-    assert all(window.source_id in window.source_ids for window in packed)
+    assert [window.source_ids for window in packed] == [
+        ("mem_anchor", "mem_first"),
+        ("mem_later",),
+    ]
+    assert "anchor content" not in packed[1].content
+
+
+def test_pack_windows_keeps_unique_neighbor_when_anchor_is_seen() -> None:
+    anchor = row("mem_anchor", "anchor content")
+    first_neighbor = row("mem_first", "first neighbor", ordinal=1)
+    later_neighbor = row("mem_later", "later neighbor", ordinal=2)
+    packed = pack_windows(
+        [
+            (0.9, anchor, [anchor, first_neighbor]),
+            (0.8, anchor, [anchor, later_neighbor]),
+        ],
+        top_k=3,
+        max_tokens=200,
+        max_items=3,
+    )
+    combined = " ".join(window.content for window in packed)
+    assert "first neighbor" in combined
+    assert "later neighbor" in combined
 
 
 def test_pack_windows_orders_chunks_before_timestamps() -> None:
