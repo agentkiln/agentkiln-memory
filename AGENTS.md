@@ -1,86 +1,89 @@
 # AGENTS.md
 
-本文件是 AI Agent 进入 AgentKiln Memory 的入口，面向后续开发和验证。README.md 面向人类读者，重点说明项目用途和快速开始；本文件说明项目约束、命令入口和验证闭环。细节优先查代码和 docs 下的文档，不在本文件重复维护。
+This file is the entry point for AI Agents working on AgentKiln Memory. README.md targets human readers with project purpose and quick start; this file defines constraints, command entry points, and the verification loop. Prefer code and docs under `docs/` for details; do not duplicate them here.
 
-## 项目定位
+## Project Positioning
 
-AgentKiln Memory 面向 an open retrieval evaluation 的文本记忆赛道，实现参赛方自行部署的同步 `Add` 和 `Search` 接口。Search 只返回记忆证据，不生成最终答案。
+AgentKiln Memory targets the textual retrieval track of the an open retrieval evaluation and implements the participant-hosted synchronous `Add` and `Search` interfaces. Search returns memory evidence only; it never generates final answers.
 
-技术栈和结构：
+Technology stack and structure:
 
-- Python 3.10 及以上，FastAPI，Pydantic，SQLite FTS5，Uvicorn。
-- `app/`：接口模型、配置、SQLite 存储、检索、证据打包和服务入口。
-- `eval/`：离线检索指标和 JSONL 评测入口。
-- `scripts/`：本地验证、公开契约检查、恢复检查、发布检查和隐私扫描。
-- `tests/`：接口契约、隔离、持久化、并发、时间检索和工具验证。
-- `deploy/`：Caddy 公网 HTTPS 反向代理示例和部署说明。
-- `docs/`：构建状态、项目状态和提交材料说明。
+- Python 3.10+, FastAPI, Pydantic, SQLite FTS5, PostgreSQL, Uvicorn.
+- `app/`: interface models, configuration, storage backends, retrieval, evidence packing, and service entry point.
+- `eval/`: offline retrieval metrics and JSONL evaluation entry.
+- `scripts/`: local verification, public contract checks, recovery checks, release checks, and privacy scanning.
+- `tests/`: interface contracts, isolation, persistence, concurrency, temporal retrieval, and tooling.
+- `deploy/`: public HTTPS reverse proxy examples, PandaStack deployment guide, and deployment notes.
+- `docs/`: build status, project state, technical report, and submission materials.
 
-## 必须遵守
+## Must Follow
 
-- 所有记忆、词法索引、向量候选、邻接窗口和缓存必须按精确 `user_id` 隔离。
-- Add 返回成功前必须完成持久化和索引，使记录立即可检索。
-- 相同 `request_id` 和相同请求体必须幂等；相同 `request_id` 携带不同请求体时必须返回冲突。
-- Search 返回的 `data` 必须按相关性排序，数量不得超过 `top_k`。
-- 不得在仓库中提交密钥、`.env`、数据库、评测私有数据、日志或凭据文件。
-- 线上部署使用 `AML_PRODUCTION=1`、`AML_LLM_MODE=competition` 和随机生成的 `AML_API_KEY`。
-- 正式运行模型按当前赛事合同配置；不得在 `competition` 模式缺少凭证时静默降级。
-- 只有真实执行过的步骤才能写入验证结果；没有官方成绩时不得暗示已经获得名次。
-- 修改接口行为时，必须同步更新测试、README 示例和提交材料。
-- 修复线上问题后，优先补一个能复现该问题的测试，再提交修复。
+- All memories, lexical indexes, vector candidates, neighbor windows, and caches must be isolated by the exact `user_id`.
+- Add must complete persistence and indexing before returning success, so records are immediately searchable.
+- The same `request_id` with the same payload must be idempotent; the same `request_id` with a different payload must return a conflict.
+- Search `data` must be ordered by relevance and must not exceed `top_k`.
+- Do not commit keys, `.env`, databases, evaluation private data, logs, or credential files to the repository.
+- Production deployment uses `AML_PRODUCTION=1`, `AML_LLM_MODE=competition`, and a randomly generated `AML_API_KEY`.
+- Runtime models follow the current competition contract; never silently degrade in `competition` mode when credentials are missing.
+- Only real executed steps may be recorded as verification results; never imply an official ranking without one.
+- Interface behavior changes must update tests, README examples, and submission materials together.
+- After fixing a production issue, add a test that reproduces it before committing the fix.
 
-## 提交规范
+## Commit Rules
 
-- Git 提交人名称统一使用 `chronicle`，邮箱使用项目维护者邮箱；不得写入其他作者信息。
-- 提交信息使用 `type: short description`，类型限定为 `feat`、`fix`、`test`、`docs`、`chore`、`security`、`perf`、`refactor`。
-- 描述使用英文小写短句，说明这次提交改变的行为，不写“update code”这类空泛描述。
-- 一个提交只处理一类变化。修复 bug、增加功能、文档更新和依赖调整不要混在同一次提交。
-- 修复缺陷时优先先写失败测试，再改实现，再确认测试通过。
-- 提交前必须运行 `pytest -q` 和 `python scripts/privacy_scan.py --root .`。
-- 提交前必须检查 `git status --short`，确保没有数据库、日志、密钥、`.env`、临时数据或 `del/` 内容被加入暂存区。
-- 正式评测冻结后，不再改写该版本的接口行为；新实验使用新提交并通过独立部署验证。
-- 如果包含安全问题修复，提交信息必须以 `security:` 开头；如果包含性能优化，提交信息必须以 `perf:` 开头。
-- 如果一次提交同时包含多个目的，拆分提交，不要用一个大提交混合功能、修复、文档和依赖调整。
+- Git committer name is `chronicle`; email uses the project maintainer address; do not add other author information.
+- Commit messages use `type: short description` with types limited to `feat`, `fix`, `test`, `docs`, `chore`, `security`, `perf`, `refactor`.
+- Descriptions use lowercase English short sentences describing the behavior change; avoid empty descriptions such as `update code`.
+- One commit handles one type of change. Do not mix bug fixes, features, documentation, and dependency updates in one commit.
+- Bug fixes should add a failing test first, then the fix, then confirm tests pass.
+- Before committing, run `pytest -q` and `python scripts/privacy_scan.py --root .`.
+- Before committing, check `git status --short` to ensure no databases, logs, keys, `.env`, temporary data, or `del/` content is staged.
+- After formal evaluation freezes, do not rewrite interface behavior for that version; new experiments use new commits with independent deployment verification.
+- Security fixes use `security:` prefix; performance optimizations use `perf:` prefix.
+- Split multi-purpose commits rather than mixing features, fixes, documentation, and dependency changes.
 
-## 工程约定
+## Engineering Conventions
 
-| 目标 | 命令 |
+| Goal | Command |
 |---|---|
-| 单元测试 | `python -m pytest -q` |
-| 隐私扫描 | `python scripts/privacy_scan.py --root .` |
-| 本地端到端 | `python scripts/local_verify.py --port 8123 --concurrency 24` |
-| 线上接口契约 | `python scripts/ops_contract.py --base-url https://your-domain.example --api-key "$MEMORY_SYSTEM_KEY"` |
-| 重启恢复 | `python scripts/recovery_check.py --base-url http://127.0.0.1:8000 --api-key "$AML_API_KEY" --container agentkiln-memory` |
-| 发布检查 | `python scripts/release_check.py --repository-url ... --add-url ... --search-url ... --health-url ...` |
+| Unit tests | `python -m pytest -q` |
+| Privacy scan | `python scripts/privacy_scan.py --root .` |
+| Local end-to-end | `python scripts/local_verify.py --port 8123 --concurrency 24` |
+| Public contract | `python scripts/ops_contract.py --base-url https://your-domain.example --api-key "$MEMORY_SYSTEM_KEY"` |
+| Restart recovery | `python scripts/recovery_check.py --base-url http://127.0.0.1:8000 --api-key "$AML_API_KEY" --container agentkiln-memory` |
+| Release check | `python scripts/release_check.py --repository-url ... --add-url ... --search-url ... --health-url ...` |
 
-## 验证闭环
+## Verification Loop
 
-修改代码后按以下顺序推进，不要停在代码编辑本身。
+After code changes, follow this order; do not stop at code editing.
 
-1. 先运行与改动最接近的测试。
-2. 再运行 `python -m pytest -q` 和 `python scripts/privacy_scan.py --root .`。
-3. 涉及服务启动或接口行为时，运行 `python scripts/local_verify.py`。
-4. 涉及公网部署时，运行 `scripts/ops_contract.py` 和 `scripts/recovery_check.py`。
-5. 涉及提交或冻结版本时，运行 `scripts/release_check.py`。
+1. Run the tests closest to the change first.
+2. Run `python -m pytest -q` and `python scripts/privacy_scan.py --root .`.
+3. For service startup or interface behavior changes, run `python scripts/local_verify.py`.
+4. For public deployment changes, run `scripts/ops_contract.py` and `scripts/recovery_check.py`.
+5. For commit or frozen-version changes, run `scripts/release_check.py`.
 
-如果规则只写在文档里，Agent 和人都可能在压力下违反。能让脚本检查的规则，要加到 `scripts/privacy_scan.py`、`scripts/release_check.py` 或 `tests/` 中。
+Rules that only live in documentation can be violated under pressure. Add script-checkable rules to `scripts/privacy_scan.py`, `scripts/release_check.py`, or `tests/`.
 
-## 文档导航
+## Documentation Map
 
-- `README.md`：接口示例、运行方式、配置项和部署入口。
-- `docs/BUILD_STATUS.md`：当前完成项、未完成项和外部阻塞。
-- `docs/STATE.md`：最近一次验证记录和下一项任务。
-- `SUBMISSION.md`：提交材料草稿。
-- `DISCLOSURE.md`：方法和完整性说明。
-- `SECURITY.md`：密钥处理和评测数据删除要求。
-- `deploy/README.md`：公网部署、HTTPS 和契约检查步骤。
+- `README.md`: interface examples, run instructions, configuration, and deployment entry.
+- `README.zh-CN.md`: Chinese version of the README.
+- `docs/BUILD_STATUS.md`: completed items, open items, and external blockers.
+- `docs/STATE.md`: latest verification record and next task.
+- `docs/TECHNICAL_REPORT.md`: design decisions, architecture, retrieval pipeline, integrity guarantees, and limitations.
+- `SUBMISSION.md`: evaluation submission draft.
+- `DISCLOSURE.md`: method and integrity disclosure.
+- `SECURITY.md`: key handling and evaluation data deletion requirements.
+- `deploy/README.md`: public deployment, HTTPS, and contract check steps.
+- `deploy/PandaStack.md`: PandaStack Apps with Managed PostgreSQL deployment.
 
-不再使用的项目文件移入 `del/`，不要直接删除。真实测试临时文件由测试框架自行清理。
+Retired project files move into `del/`; do not delete them directly. Real test temporary files are cleaned by the test framework.
 
-## 规则维护
+## Rule Maintenance
 
-AGENTS.md 不是写完就锁定的文档。每次发现 AI 犯了一个会影响接口、隔离、安全或验证结果的错误，就判断应该把规则放在哪里：
+AGENTS.md is not a write-once document. Each time an AI makes a mistake that affects interface behavior, isolation, security, or verification results, decide where the rule belongs:
 
-- 违反后会直接写出错误代码的硬性规则，加入本文件。
-- 只影响某个模块的开发细节，加入对应 `docs/` 文档或代码注释。
-- 可以用脚本检查的规则，直接加入自动化检查。
+- Hard rules whose violation produces incorrect code go into this file.
+- Module-specific development details go into the corresponding `docs/` file or code comments.
+- Script-checkable rules go directly into automated checks.
