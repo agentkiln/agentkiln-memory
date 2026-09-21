@@ -490,6 +490,20 @@ def test_options_do_not_override_query_evidence(tmp_path: Path) -> None:
         },
     ).json()["data"]
     assert result == []
+
+
+def test_search_scores_are_bounded_and_ordered(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    add_payload_data = add_payload()
+    assert client.post("/add", json=add_payload_data).status_code == 200
+    items = client.post(
+        "/search",
+        json={"query": "jasmine tea", "user_id": "user-a", "top_k": 10},
+    ).json()["data"]
+    assert items
+    scores = [item["score"] for item in items]
+    assert all(score is not None and 0.0 <= score <= 1.0 for score in scores)
+    assert scores == sorted(scores, reverse=True)
     assert client.post(
         "/search",
         json={
