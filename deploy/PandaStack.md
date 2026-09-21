@@ -54,6 +54,18 @@ OPENAI_MODEL=gpt-4o-mini
 OPENAI_EMBEDDING_MODEL=text-embedding-v4
 ```
 
+The embedding endpoint reuses `OPENAI_BASE_URL` and `OPENAI_API_KEY` unless you set `OPENAI_EMBEDDING_BASE_URL` and `OPENAI_EMBEDDING_API_KEY`, so chat and embeddings can come from different OpenAI-compatible providers.
+
+## Auto Deploy
+
+This repository has `.github/workflows/deploy-pandastack.yml`, which calls the PandaStack deploy API on every push to `master`. Add a repository secret:
+
+```text
+PANDASTACK_API_KEY = pds_...
+```
+
+Create that token under PandaStack API Tokens. After that, `git push origin master` triggers a redeploy automatically.
+
 ## Verify
 
 ```bash

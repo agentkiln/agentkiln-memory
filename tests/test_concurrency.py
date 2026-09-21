@@ -15,6 +15,8 @@ def test_search_concurrency_limit_is_enforced(tmp_path: Path) -> None:
         openai_base_url="https://api.openai.com/v1",
         openai_model="gpt-4o-mini",
         embedding_model="text-embedding-v4",
+        embedding_api_key=None,
+        embedding_base_url="https://api.openai.com/v1",
         timeout_seconds=1,
         candidate_limit=100,
         max_output_tokens=8000,

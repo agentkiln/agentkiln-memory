@@ -21,3 +21,27 @@ def test_default_max_output_items_matches_deployment(monkeypatch, tmp_path: Path
     monkeypatch.delenv("AML_MAX_OUTPUT_ITEMS", raising=False)
     settings = Settings.from_env()
     assert settings.max_output_items == 24
+
+
+def test_embedding_reuses_chat_credentials_by_default(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("AML_DATABASE_PATH", str(tmp_path / "memory.db"))
+    monkeypatch.setenv("AML_LLM_MODE", "competition")
+    monkeypatch.setenv("OPENAI_API_KEY", "chat-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://chat.example.com/v1")
+    monkeypatch.delenv("OPENAI_EMBEDDING_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_EMBEDDING_BASE_URL", raising=False)
+    settings = Settings.from_env()
+    assert settings.embedding_api_key == "chat-key"
+    assert settings.embedding_base_url == "https://chat.example.com/v1"
+
+
+def test_embedding_can_use_separate_endpoint(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("AML_DATABASE_PATH", str(tmp_path / "memory.db"))
+    monkeypatch.setenv("AML_LLM_MODE", "competition")
+    monkeypatch.setenv("OPENAI_API_KEY", "chat-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://chat.example.com/v1")
+    monkeypatch.setenv("OPENAI_EMBEDDING_API_KEY", "embed-key")
+    monkeypatch.setenv("OPENAI_EMBEDDING_BASE_URL", "https://embed.example.com/v1/")
+    settings = Settings.from_env()
+    assert settings.embedding_api_key == "embed-key"
+    assert settings.embedding_base_url == "https://embed.example.com/v1"

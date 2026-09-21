@@ -16,6 +16,8 @@ def settings(tmp_path: Path, api_key: str | None = None) -> Settings:
         openai_base_url="https://api.openai.com/v1",
         openai_model="gpt-4o-mini",
         embedding_model="text-embedding-v4",
+        embedding_api_key=None,
+        embedding_base_url="https://api.openai.com/v1",
         timeout_seconds=1,
         candidate_limit=100,
         max_output_tokens=8000,
@@ -265,6 +267,30 @@ def test_production_mode_requires_api_key(monkeypatch, tmp_path: Path) -> None:
         raise AssertionError("expected production mode to require API key")
 
 
+def test_api_key_is_normalized_before_authentication(monkeypatch, tmp_path: Path) -> None:
+    key = "normalized-key-value-1234"
+    monkeypatch.setenv("AML_PRODUCTION", "1")
+    monkeypatch.setenv("AML_LLM_MODE", "competition")
+    monkeypatch.setenv("AML_API_KEY", f"  {key}  ")
+    monkeypatch.setenv("OPENAI_API_KEY", "runtime-model-key")
+    monkeypatch.setenv("AML_DATABASE_PATH", str(tmp_path / "memory.db"))
+    resolved = Settings.from_env()
+    assert resolved.api_key == key
+    client = TestClient(create_app(resolved))
+    wrong_key = client.post(
+        "/add",
+        json=add_payload(),
+        headers={"Authorization": "Bearer " + ("wrong-" + key)},
+    )
+    assert wrong_key.status_code == 401
+    accepted = client.post(
+        "/add",
+        json=add_payload(),
+        headers={"Authorization": "Bearer " + key},
+    )
+    assert accepted.status_code != 401
+
+
 def test_production_mode_requires_model_credential(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("AML_PRODUCTION", "1")
     monkeypatch.setenv("AML_LLM_MODE", "competition")
@@ -408,6 +434,8 @@ def test_search_cache_invalidates_when_add_concurrency_changes(tmp_path: Path) -
         openai_base_url=configured.openai_base_url,
         openai_model=configured.openai_model,
         embedding_model=configured.embedding_model,
+        embedding_api_key=configured.embedding_api_key,
+        embedding_base_url=configured.embedding_base_url,
         timeout_seconds=configured.timeout_seconds,
         candidate_limit=configured.candidate_limit,
         max_output_tokens=configured.max_output_tokens,

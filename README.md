@@ -134,6 +134,8 @@ python scripts/release_check.py \
 | `OPENAI_API_KEY` | empty | Runtime model credential |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Add/Search LLM model |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-v4` | Embedding model |
+| `OPENAI_EMBEDDING_BASE_URL` | falls back to `OPENAI_BASE_URL` | Optional separate embedding endpoint |
+| `OPENAI_EMBEDDING_API_KEY` | falls back to `OPENAI_API_KEY` | Optional separate embedding credential |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
 | `AML_TIMEOUT_SECONDS` | `90` | Upstream timeout |
 | `AML_CANDIDATE_LIMIT` | `300` | Candidate cap before ranking |

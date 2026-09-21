@@ -37,10 +37,15 @@ class MemoryLLM:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         self._require_competition_key()
-        if self.settings.llm_mode != "competition" or not self.settings.openai_api_key:
+        if self.settings.llm_mode != "competition" or not self.settings.embedding_api_key:
             return [self._mock_embedding(text) for text in texts]
         payload = {"model": self.settings.embedding_model, "input": texts}
-        body = self._post("/embeddings", payload)
+        body = self._post(
+            "/embeddings",
+            payload,
+            base_url=self.settings.embedding_base_url,
+            api_key=self.settings.embedding_api_key,
+        )
         rows = sorted(body.get("data", []), key=lambda row: row.get("index", 0))
         vectors = [[float(value) for value in row["embedding"]] for row in rows]
         if len(vectors) != len(texts):
@@ -121,15 +126,24 @@ class MemoryLLM:
             intent=intent,
         )
 
-    def _post(self, path: str, payload: dict) -> dict:
+    def _post(
+        self,
+        path: str,
+        payload: dict,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ) -> dict:
+        resolved_base_url = base_url or self.settings.openai_base_url
+        resolved_api_key = api_key or self.settings.openai_api_key
         attempts = 3
         last_error: Exception | None = None
         for attempt in range(attempts):
             request = urllib.request.Request(
-                f"{self.settings.openai_base_url}{path}",
+                f"{resolved_base_url}{path}",
                 data=json.dumps(payload).encode("utf-8"),
                 headers={
-                    "Authorization": f"Bearer {self.settings.openai_api_key}",
+                    "Authorization": f"Bearer {resolved_api_key}",
                     "Content-Type": "application/json",
                 },
                 method="POST",

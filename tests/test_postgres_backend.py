@@ -12,6 +12,8 @@ def settings(tmp_path: Path, database_url: str | None = None) -> Settings:
         openai_base_url="https://api.openai.com/v1",
         openai_model="gpt-4o-mini",
         embedding_model="text-embedding-v4",
+        embedding_api_key=None,
+        embedding_base_url="https://api.openai.com/v1",
         timeout_seconds=1,
         candidate_limit=100,
         max_output_tokens=8000,
@@ -37,4 +39,3 @@ def test_local_settings_use_sqlite_backend(tmp_path: Path) -> None:
 
     service = MemoryService(settings(tmp_path))
     assert service.database.backend_name == "sqlite"
-
