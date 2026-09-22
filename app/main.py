@@ -69,6 +69,11 @@ app.docs_url = None
 app.redoc_url = None
 
 
+@app.get('/', include_in_schema=False)
+def root():
+    return {"service": app.title, "version": app.version, "health": "/health", "docs": "/docs"}
+
+
 @app.get('/docs', include_in_schema=False)
 def custom_docs():
     return get_swagger_ui_html(openapi_url=app.openapi_url, title=app.title + ' API')
