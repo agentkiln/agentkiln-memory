@@ -41,7 +41,7 @@ Preliminary target for the public endpoint:
 - Add concurrency: 16
 - Search concurrency: 32
 - Timeout: 90 seconds for upstream model calls
-- Database: Managed PostgreSQL with auto-suspend, 1 GB storage (free tier current); plan 5 GB upgrade before Full evaluation
+- Database: Managed PostgreSQL with auto-suspend; current free tier 1 GB, plan clone to 4 GB instance before Full evaluation (PandaStack resize is clone-based, no in-place upgrade)
 - Container baseline: 8 vCPU burst, 4 GB RAM
 
 Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchronous Add calls completed in approximately 0.36 seconds, Search latency approximately 0.081 seconds. Replace this section with the measured production results after running `scripts/ops_contract.py` and `scripts/recovery_check.py`.
