@@ -13,7 +13,8 @@
 
 ![CI](https://github.com/agentkiln/agentkiln-memory/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/agentkiln/agentkiln-memory/actions/workflows/deploy-pandastack.yml/badge.svg)
-[![Open Retrieval Benchmark](https://img.shields.io/badge/Benchmark-Textual%20Memory%20Track-8A2BE2)](https://open-retrieval-benchmark.example)
+
+
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 **面向 AI Agent 的证据型长期记忆服务。**
@@ -44,7 +45,7 @@ AgentKiln Memory 是一个证据型长期记忆服务，为 AI Agent 提供基�
 
 这个设计带来的直接收益是可审计：下游 Agent 能看到记忆系统实际返回了什么，便于验证没有幻觉、便于定位检索质量问题，也便于在评测环境中检验记忆能力的真实水平。
 
-项目面向 [Open Retrieval Benchmark](https://open-retrieval-benchmark.example) 文本记忆赛道构建，同样适用于生产环境的 Agent 记忆管道。
+同样适用于生产环境的 Agent 记忆管道。
 
 ## 功能特性
 
@@ -303,7 +304,7 @@ docker compose up -d
 
 ### 验证
 
-提交到 Open Retrieval Benchmark 或部署到生产环境前：
+部署到生产环境前：
 
 ```bash
 python scripts/ops_contract.py --base-url https://your-domain.example --api-key "$MEMORY_SYSTEM_KEY"
@@ -374,7 +375,7 @@ agentkiln-memory/
 
 ## 安全
 
-- 不要提交 `.env`、API key、system credential 或 system credential
+- 不要提交 `.env`、API key 或系统凭据
 - Health 公开；Add 和 Search 可配置 Bearer、Token 或 `X-Api-Key` 认证
 - 服务不记录请求体或凭据
 - 所有记忆只通过精确提交的 `user_id` 检索

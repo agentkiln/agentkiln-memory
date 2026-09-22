@@ -4,7 +4,8 @@ Complete the personal contact fields before submitting. Do not include secrets i
 
 ## Recommended selections
 
-- Evaluation type: textual retrieval
+
+
 - Participant division: Open-source Methods
 - System name: AgentKiln Memory
 - Version: 1.1.0
@@ -20,7 +21,7 @@ AgentKiln Memory is an evidence-only long-term memory service. It persists sourc
 - Health: `GET https://your-domain.example/health`
 - Add: `POST https://your-domain.example/add`
 - Search: `POST https://your-domain.example/search`
-- Authentication: Bearer token, `Token`, or `X-Api-Key` with the submitted system credential
+- Authentication: Bearer token, `Token`, or `X-Api-Key`
 
 ## Deployment summary
 
@@ -41,7 +42,7 @@ Preliminary target for the public endpoint:
 - Add concurrency: 16
 - Search concurrency: 32
 - Timeout: 90 seconds for upstream model calls
-- Database: Managed PostgreSQL with auto-suspend; current free tier 1 GB, plan clone to 4 GB instance before Full evaluation (PandaStack resize is clone-based, no in-place upgrade)
+- Database: Managed PostgreSQL with auto-suspend; 4 GB instance (PandaStack clone-based resize)
 - Container baseline: 8 vCPU burst, 4 GB RAM
 
 Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchronous Add calls completed in approximately 0.36 seconds, Search latency approximately 0.081 seconds. Replace this section with the measured production results after running `scripts/ops_contract.py` and `scripts/recovery_check.py`.
@@ -53,7 +54,7 @@ Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchrono
 - Organization or team, or `Independent`
 - Public repository URL
 - Public display consent choices
-- system credential delivery through the organizer's controlled request flow
+- System credentials delivered through a controlled request flow
 - Technical report: see `docs/TECHNICAL_REPORT.md`
 
 ## Compliance notes
@@ -61,4 +62,4 @@ Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchrono
 - Search returns source evidence and never generates final answers.
 - No benchmark answers or question-specific hard-coding are present.
 - All memories are retrieved only through the exact submitted `user_id`.
-- Evaluation data must be deleted within 30 days after the run unless the organizer approves another retention period.
+- Evaluation data must be deleted after the run unless a longer retention period is agreed.

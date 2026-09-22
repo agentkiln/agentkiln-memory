@@ -4,7 +4,7 @@ This file is the entry point for AI Agents working on AgentKiln Memory. README.m
 
 ## Project Positioning
 
-AgentKiln Memory targets the textual retrieval track of the an open retrieval evaluation and implements the participant-hosted synchronous `Add` and `Search` interfaces. Search returns memory evidence only; it never generates final answers.
+AgentKiln Memory implements a synchronous `Add` and `Search` evidence service. Search returns memory evidence only; it never generates final answers.
 
 Technology stack and structure:
 

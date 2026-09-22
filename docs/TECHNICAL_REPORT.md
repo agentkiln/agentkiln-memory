@@ -4,7 +4,7 @@
 
 AgentKiln Memory is an evidence-only long-term memory service for AI agents. It stores agent conversation turns under strict per-user isolation, indexes them with a hybrid lexical and vector pipeline, and returns verbatim source evidence ranked by relevance. The system never generates final answers; the downstream agent sees exactly what the memory layer retrieved.
 
-The system was designed for the Open Retrieval Benchmark textual retrieval track and follows the public synchronous Add/Search contract. The same guarantees apply in production: idempotent writes, conflict detection, token-bounded output, and fail-closed behavior when required model credentials are absent.
+The system follows a public synchronous Add/Search contract. The same guarantees apply in production: idempotent writes, conflict detection, token-bounded output, and fail-closed behavior when required model credentials are absent.
 
 ## 2. Design Decisions
 

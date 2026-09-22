@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agentkiln-memory"
 version = "1.0.0"
-description = "Evidence-only long-term memory service for the an open retrieval evaluation"
+description = "Evidence-only long-term memory service for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

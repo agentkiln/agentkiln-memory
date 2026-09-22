@@ -65,14 +65,15 @@ Public HTTPS deployment on PandaStack with Managed PostgreSQL has been verified:
 ## Not yet verified
 
 - Platform-issued Eval Key and public Smoke.
-- Official Full evaluation.
+
+
 - Official score.
 
 Do not report planned model use or local tests as an official competition result.
 
 ## Next minimum task
 
-Apply for an Eval Key on the open retrieval evaluation platform page, then run:
+Apply for an evaluation key, then run:
 
 ```bash
 python scripts/ops_contract.py --base-url https://<app-id>.pandastack.ai --api-key "$MEMORY_SYSTEM_KEY"

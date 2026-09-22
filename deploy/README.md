@@ -1,6 +1,6 @@
 # Deployment
 
-This directory contains the minimum public deployment surface for the an open retrieval evaluation.
+This directory contains the public deployment surface for AgentKiln Memory.
 
 Required runtime values:
 
@@ -38,4 +38,4 @@ The platform receives these live endpoints and the matching authentication mode:
 - `POST https://memory.example.com/search`
 - `GET https://memory.example.com/health`
 
-Keep the container, volume, commit, image tag, and environment settings frozen from the first accepted Full evaluation until the organizer finishes review.
+Keep the container, volume, commit, image tag, and environment settings frozen once a production deployment is accepted.

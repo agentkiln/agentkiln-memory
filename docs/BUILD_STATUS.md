@@ -64,7 +64,7 @@ The linked competition page states:
 | Privacy scan | Complete | CI blocks tracked databases, keys, tokens, credentials, and logs. |
 | Formal model verification | Complete | Chat, embedding, and rerank calls verified against live PandaStack deployment. |
 | Public deployment | Complete | PandaStack Apps with Managed PostgreSQL; public HTTPS endpoints verified. |
-| Platform Smoke | Not run | Requires a evaluation API key. |
+| Platform Smoke | Not run | Requires an evaluation API key. |
 | Full evaluation | Not run | Requires an accepted deployed endpoint and available quota. |
 | Official score | Not available | No official result exists yet. |
 
@@ -76,7 +76,7 @@ The remaining work is operational rather than architectural:
 2. Deploy the `1.0.0` image to a public HTTPS host with a persistent volume.
 3. Configure `AML_API_KEY`, model credentials, and embedding/rerank endpoints.
 4. Run the contract, smoke, concurrency, and recovery checks against the deployed endpoint.
-5. Submit the live Add/Search URLs and repository commit for organizer review.
+5. Submit the live Add/Search URLs and repository commit for review.
 6. Run the platform Smoke, then reserve the Full attempt for the frozen version.
 
-Do not enter an official score until the organizer publishes a real evaluation result.
+Do not publish benchmark claims until a real evaluation result exists.

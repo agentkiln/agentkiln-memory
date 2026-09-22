@@ -13,14 +13,15 @@
 
 ![CI](https://github.com/agentkiln/agentkiln-memory/actions/workflows/ci.yml/badge.svg)
 ![Deploy](https://github.com/agentkiln/agentkiln-memory/actions/workflows/deploy-pandastack.yml/badge.svg)
-[![Open Retrieval Benchmark](https://img.shields.io/badge/Benchmark-Textual%20Memory%20Track-8A2BE2)](https://open-retrieval-benchmark.example)
+
+
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 English | [简体中文](README.zh-CN.md)
 
 **An evidence-only long-term memory service for AI agents.**
 
-AgentKiln Memory persists agent conversations under strict user isolation, indexes them with hybrid lexical and vector retrieval, and returns verbatim source evidence without generating answers. Built for the [Open Retrieval Benchmark](https://open-retrieval-benchmark.example) textual retrieval track, suitable for production agent pipelines.
+AgentKiln Memory persists agent conversations under strict user isolation, indexes them with hybrid lexical and vector retrieval, and returns verbatim source evidence without generating answers. Suitable for production agent pipelines.
 
 [Quick Start](#quick-start) | [API Reference](#api) | [Architecture](#architecture) | [Configuration](#configuration) | [Deployment](#deployment) | [Contributing](#contributing) | [License](#license)
 
@@ -50,7 +51,7 @@ Long-term memory is the backbone of capable AI agents. Most memory systems confl
 
 **Hybrid retrieval.** Lexical search catches exact terms, names, dates, and code identifiers that vector-only systems often miss. Vector retrieval catches paraphrases and semantic matches that lexical search cannot bridge. Reciprocal rank fusion combines both channels, and adjacent-turn expansion restores conversation context that a single message cannot carry alone.
 
-**Contract-level integrity.** The system was built for the Open Retrieval Benchmark evaluation, which means strict user isolation, idempotent writes, request conflict detection, token budgeting, and no answer generation are contract requirements, not optional features. The same guarantees apply in production.
+**Contract-level integrity.** Strict user isolation, idempotent writes, request conflict detection, token budgeting, and no answer generation are contract-level requirements, not optional features. The same guarantees apply in production.
 
 **CJK-native.** Unicode normalization, Porter tokenization, and CJK n-gram support work out of the box. Chinese and English memory content receive equal treatment in lexical indexing and vector retrieval.
 
@@ -311,7 +312,7 @@ See [deploy/PandaStack.md](deploy/PandaStack.md) for the full production deploym
 
 ### Verification
 
-Before submitting to the Open Retrieval Benchmark or deploying to production:
+Before deploying to production:
 
 ```bash
 python scripts/ops_contract.py --base-url https://your-domain.example --api-key "$MEMORY_SYSTEM_KEY"
@@ -382,11 +383,11 @@ See [AGENTS.md](AGENTS.md) for the full development rules and verification workf
 
 ## Security
 
-- Do not commit `.env`, API keys, system credentials, or system credentials
+- Do not commit `.env`, API keys, or system credentials
 - Health is public; Add and Search can require Bearer, Token, or `X-Api-Key` authentication
 - The service does not log request bodies or credentials
 - All memories are retrieved only through the exact submitted `user_id`
-- Delete the evaluation database or Docker volume within 30 days after the run unless written organizer permission says otherwise
+- Delete the database or Docker volume after evaluation or testing runs complete
 
 See [SECURITY.md](SECURITY.md) for the full security policy.
 

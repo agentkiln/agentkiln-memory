@@ -156,7 +156,7 @@ ROOT_PAGE = """<!DOCTYPE html>
   </div>
 </section>
 <footer>
-  <span>AgentKiln Memory · textual retrieval Track · Open Retrieval Benchmark</span>
+  <span>AgentKiln Memory · Evidence-only long-term memory service</span>
   <span>Python 3.10+ · FastAPI · PostgreSQL</span>
 </footer>
 </body>

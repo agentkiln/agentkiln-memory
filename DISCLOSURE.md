@@ -4,13 +4,14 @@
 
 - System: AgentKiln Memory
 - Version: 1.0.0
-- Track: textual retrieval
+
+
 - Division: Open-source Methods
 - Route: Participant-hosted Add/Search API
 
 ## Method summary
 
-AgentKiln Memory was created for the an open retrieval evaluation. The service, tests, deployment files, evaluation contract checks, and documentation live together in this repository.
+AgentKiln Memory is a standalone evidence-only memory service. The service, tests, deployment files, contract checks, and documentation live together in this repository.
 
 The implementation uses standard, publicly documented information-retrieval methods, including SQLite FTS5, BM25 ranking, Unicode normalization, Porter tokenization, CJK n-grams, cosine similarity, reciprocal rank fusion, source-order window expansion, temporal intent scoring, and token budgeting.
 
