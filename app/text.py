@@ -35,7 +35,7 @@ CONCEPTS = (
     {"school", "study", "studied", "education", "university", "college", "degree", "\u5b66\u6821", "\u5b66\u4e60", "\u8bfb\u4e66", "\u5927\u5b66", "\u5b66\u6821\u8bfb\u4e66"},
     {"book", "read", "reading", "author", "novel", "\u4e66", "\u770b\u4e66", "\u4f5c\u8005", "\u5c0f\u8bf4", "\u9605\u8bfb", "\u770b\u4ec0\u4e48", "\u770b\u4ec0\u4e48\u4e66", "\u4ec0\u4e48\u4e66"},
     {"music", "song", "artist", "band", "listen", "\u6b4c", "\u97f3\u4e50", "\u6b4c\u624b", "\u4e50\u961f", "\u542c", "\u542c\u4ec0\u4e48", "\u542c\u4ec0\u4e48\u6b4c", "\u4ec0\u4e48\u6b4c"},
-    {"food", "meal", "eat", "restaurant", "drink", "tea", "coffee", "\u5403", "\u559d", "\u996d", "\u83dc", "\u9910", "\u8336", "\u5496\u5561", "\u559c\u6b22\u559d", "\u559c\u6b22\u5403"},
+    {"food", "meal", "eat", "restaurant", "drink", "tea", "coffee", "\u5403", "\u559d", "\u996d", "\u83dc", "\u9910", "\u8336", "\u5496\u5561", "\u996e\u54c1", "\u559c\u6b22", "\u559c\u597d"},
     {"health", "doctor", "medicine", "medical", "treatment", "\u5065\u5eb7", "\u533b\u751f", "\u533b\u7597", "\u8eab\u4f53", "\u6cbb\u7597"},
     {"family", "friend", "partner", "spouse", "child", "children", "parent", "\u5bb6\u4eba", "\u670b\u53cb", "\u5bb6\u5ead", "\u5b69\u5b50", "\u7236\u6bcd", "\u8c01"},
     {"travel", "trip", "vacation", "holiday", "visit", "camping", "hiking", "\u65c5\u6e38", "\u51fa\u53bb\u73a9", "\u5ea6\u5047", "\u53c2\u89c2", "\u65c5\u884c", "\u53bb\u4e86\u54ea\u91cc"},
@@ -62,6 +62,22 @@ def _stem(word: str) -> set[str]:
     return {item for item in variants if len(item) > 1}
 
 
+def _cjk_segments(run: str) -> list[str]:
+    """Segment a CJK run with jieba, falling back to n-grams when jieba is unavailable."""
+    try:
+        import jieba
+
+        return [token for token in jieba.lcut(run) if token.strip()]
+    except ImportError:
+        segments: list[str] = []
+        if len(run) == 1:
+            return [run]
+        for size in (2, 3):
+            for index in range(max(0, len(run) - size + 1)):
+                segments.append(run[index : index + size])
+        return segments
+
+
 def lexical_terms(value: str, limit: int = 256) -> list[str]:
     normalized = normalize_text(value)
     ordered: dict[str, None] = {}
@@ -72,14 +88,12 @@ def lexical_terms(value: str, limit: int = 256) -> list[str]:
                 ordered.setdefault(variant, None)
     for match in CJK_RE.finditer(normalized):
         run = match.group(0)
-        if len(run) == 1:
-            ordered.setdefault(run, None)
-            continue
-        for size in (2, 3):
-            for index in range(max(0, len(run) - size + 1)):
-                term = run[index : index + size]
-                if term not in STOPWORDS:
-                    ordered.setdefault(term, None)
+        for term in _cjk_segments(run):
+            if term and term not in STOPWORDS and (term in CJK_RE.pattern or len(term) > 1):
+                ordered.setdefault(term, None)
+                continue
+            if term and term not in STOPWORDS and len(term) > 1:
+                ordered.setdefault(term, None)
     return list(ordered)[:limit]
 
 
