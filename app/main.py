@@ -68,11 +68,8 @@ ROOT_PAGE = """<!DOCTYPE html>
   }
   .brand { display: flex; align-items: center; gap: 12px; }
   .logo {
-    width: 38px; height: 38px; border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 17px; color: #06101f;
-    box-shadow: 0 0 24px rgba(107, 154, 255, 0.35);
+    width: 38px; height: 38px;
+    filter: drop-shadow(0 0 14px rgba(107, 154, 255, 0.35));
   }
   .brand b { font-size: 17px; font-weight: 700; display: block; }
   .brand span { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 1px; }
@@ -194,7 +191,7 @@ ROOT_PAGE = """<!DOCTYPE html>
 <div class="wrap">
 <header class="top">
   <div class="brand">
-    <div class="logo">A</div>
+    <img class="logo" src="/logo.svg" alt="AgentKiln Memory">
     <div><b>AgentKiln Memory</b><span>Evidence-only retrieval</span></div>
   </div>
   <nav class="links">
@@ -306,6 +303,13 @@ from fastapi.openapi.utils import get_openapi
 app = create_app()
 app.docs_url = None
 app.redoc_url = None
+
+
+@app.get('/logo.svg', include_in_schema=False)
+def logo():
+    from pathlib import Path as _Path
+    from fastapi.responses import FileResponse
+    return FileResponse(_Path(__file__).parent.parent / "docs" / "assets" / "agentkiln-logo.svg", media_type="image/svg+xml")
 
 
 @app.get('/', include_in_schema=False)
