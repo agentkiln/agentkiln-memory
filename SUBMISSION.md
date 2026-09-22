@@ -41,8 +41,8 @@ Preliminary target for the public endpoint:
 - Add concurrency: 16
 - Search concurrency: 32
 - Timeout: 90 seconds for upstream model calls
-- Database: Managed PostgreSQL with auto-suspend
-- Container baseline: 2 vCPU, 2 GB RAM
+- Database: Managed PostgreSQL with auto-suspend, 5 GB storage
+- Container baseline: 2 vCPU, 4 GB RAM
 
 Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchronous Add calls completed in approximately 0.36 seconds, Search latency approximately 0.081 seconds. Replace this section with the measured production results after running `scripts/ops_contract.py` and `scripts/recovery_check.py`.
 
