@@ -255,7 +255,7 @@ Health checks are unauthenticated. When `AML_API_KEY` is empty, Add and Search a
 
 ## Retrieval Pipeline
 
-The search pipeline processes a query through five stages:
+Search combines these retrieval and evidence-selection steps:
 
 1. **Query analysis**: an LLM call extracts retrieval cues, facets, and temporal intent from the query. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
 
@@ -263,9 +263,11 @@ The search pipeline processes a query through five stages:
 
 3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Only vectors from the same embedding model and dimension are considered. Long `text-embedding-v4` inputs are embedded in chunks; embedding writes are batched at up to 10 texts.
 
-4. **Reciprocal rank fusion**: both candidate lists are merged using `1 / (60 + rank)` scoring, then filtered by a minimum similarity threshold.
+4. **Reciprocal rank fusion**: lexical and vector candidates, plus date candidates when applicable, are merged using `1 / (60 + rank)` scoring. Weak vector-only matches are filtered.
 
-5. **Window expansion and ranking**: matched candidates expand to include adjacent turns in the same session. Rule-based ranking combines term coverage, option matches, phrase bonuses, and temporal intent. For queries without temporal intent, configured reranker scores determine the final evidence order; `qwen3.7-text-rerank` receives at most 500 top rule-ranked candidates per call. Temporary failures fall back to rule-based ranking and are retried on the next Search. Earliest and latest queries retain time-aware rule ranking.
+5. **Window expansion and ranking**: matched candidates expand to include adjacent turns in the same session. Rule-based ranking combines term coverage, option matches, phrase bonuses, and temporal intent. For queries without temporal intent and without matching event-day timestamp evidence, configured reranker scores determine the final evidence order; `qwen3.7-text-rerank` receives at most 500 top rule-ranked candidates per call. Temporary failures fall back to rule-based ranking and are retried on the next Search. Earliest, latest, and queries with matching event-day evidence retain time-aware rule ranking.
+
+When a query clearly asks what happened on one calendar day, Search also looks up message `timestamp` values in that UTC day through the existing per-user time index. A date in a project or ticket name, or a due date or deadline, does not trigger this lookup. If no timestamped message falls on that day, ordinary reranking remains available. A later correction can suppress an older single fact, while an unrelated fact in the older message remains available when the query needs it. For explicit whole-history summaries, evidence selection keeps the top result and may include similarly relevant results from other sessions; returned results retain relevance order. Search still returns source evidence only, leaving the final answer to the caller.
 
 ## Configuration
 
