@@ -69,9 +69,48 @@ def test_production_rejects_insecure_model_endpoints(key: str, value: str) -> No
         "OPENAI_EMBEDDING_BASE_URL": "https://embed.example.com/v1",
         "RERANK_MODEL": "qwen3.7-text-rerank",
         "RERANK_BASE_URL": "https://rerank.example.com/native",
+        "DATABASE_URL": "postgresql://user:pass@db.example.com/memory?sslmode=require",
     }
     env[key] = value
 
     with patch.dict(os.environ, env, clear=True):
         with pytest.raises(ValueError, match=key):
             Settings.from_env()
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [None, "sqlite:///memory.db", "https://db.example.com/memory", "postgresql://"],
+)
+def test_production_requires_postgresql_database_url(database_url: str | None) -> None:
+    env = {
+        "AML_PRODUCTION": "1",
+        "AML_LLM_MODE": "competition",
+        "AML_API_KEY": "long-local-test-api-key",
+        "OPENAI_API_KEY": "chat-key",
+        "OPENAI_BASE_URL": "https://chat.example.com/v1",
+    }
+    if database_url is not None:
+        env["DATABASE_URL"] = database_url
+
+    with patch.dict(os.environ, env, clear=True):
+        with pytest.raises(ValueError, match="DATABASE_URL"):
+            Settings.from_env()
+
+
+def test_production_accepts_postgresql_database_url() -> None:
+    with patch.dict(
+        os.environ,
+        {
+            "AML_PRODUCTION": "1",
+            "AML_LLM_MODE": "competition",
+            "AML_API_KEY": "long-local-test-api-key",
+            "OPENAI_API_KEY": "chat-key",
+            "OPENAI_BASE_URL": "https://chat.example.com/v1",
+            "DATABASE_URL": "postgresql://user:pass@db.example.com/memory?sslmode=require",
+        },
+        clear=True,
+    ):
+        assert Settings.from_env().database_url == (
+            "postgresql://user:pass@db.example.com/memory?sslmode=require"
+        )

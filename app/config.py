@@ -27,6 +27,21 @@ def _require_https_endpoint(name: str, value: str) -> None:
         raise ValueError(f"AML_PRODUCTION requires an HTTPS {name}")
 
 
+def _require_postgresql_database(value: str | None) -> None:
+    try:
+        parsed = urlparse(value or "")
+        valid = (
+            parsed.scheme in {"postgresql", "postgres"}
+            and bool(parsed.hostname)
+            and bool(parsed.path.strip("/"))
+        )
+        _port = parsed.port
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError("AML_PRODUCTION requires a PostgreSQL DATABASE_URL")
+
+
 @dataclass(frozen=True)
 class Settings:
     database_path: Path
@@ -82,6 +97,7 @@ class Settings:
         rerank_base_url = (
             os.getenv("RERANK_BASE_URL") or embedding_base_url
         ).strip().rstrip("/")
+        database_url = (os.getenv("DATABASE_URL") or "").strip() or None
         if production:
             for name, value in (
                 ("OPENAI_BASE_URL", base_url),
@@ -89,6 +105,7 @@ class Settings:
                 ("RERANK_BASE_URL", rerank_base_url),
             ):
                 _require_https_endpoint(name, value)
+            _require_postgresql_database(database_url)
         return cls(
             database_path=Path(os.getenv("AML_DATABASE_PATH", "data/memory.db")),
             api_key=production_api_key or None,
@@ -110,5 +127,5 @@ class Settings:
             vector_only_min_similarity=float(os.getenv("AML_VECTOR_ONLY_MIN_SIMILARITY", "0.65")),
             search_concurrency=max(1, min(256, int(os.getenv("AML_SEARCH_CONCURRENCY", "32")))),
             add_concurrency=max(1, min(64, int(os.getenv("AML_ADD_CONCURRENCY", "16")))),
-            database_url=(os.getenv("DATABASE_URL") or "").strip() or None,
+            database_url=database_url,
         )

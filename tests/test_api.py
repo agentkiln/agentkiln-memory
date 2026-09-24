@@ -502,8 +502,8 @@ def test_production_mode_requires_api_key(monkeypatch, tmp_path: Path) -> None:
 
 def test_api_key_is_normalized_before_authentication(monkeypatch, tmp_path: Path) -> None:
     key = "normalized-key-value-1234"
-    monkeypatch.setenv("AML_PRODUCTION", "1")
-    monkeypatch.setenv("AML_LLM_MODE", "competition")
+    monkeypatch.setenv("AML_PRODUCTION", "0")
+    monkeypatch.setenv("AML_LLM_MODE", "off")
     monkeypatch.setenv("AML_API_KEY", f"  {key}  ")
     monkeypatch.setenv("OPENAI_API_KEY", "runtime-model-key")
     monkeypatch.setenv("AML_DATABASE_PATH", str(tmp_path / "memory.db"))
