@@ -15,6 +15,8 @@ The repository also includes Docker deployment files, a Caddy HTTPS example, Pan
 - Health endpoint returns `status`, version, mode, and model readiness.
 - Add validates required fields and rejects unsupported extra fields.
 - Search caps `top_k` at 100 and returns a `data` array.
+- Indexed `request_id` and `user_id` values are capped at 512 characters to limit PostgreSQL index key size. Add has no application-level `session_id` length or message-count maximum; Search accepts long queries and options without application-level length or count maximums.
+- Long Search queries use up to 8,000 characters from the beginning and end for retrieval and model calls.
 - Source records are isolated by exact `user_id`.
 - Memories persist across process restart.
 - Request retries are idempotent; conflicting payloads return HTTP 409.

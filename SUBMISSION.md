@@ -35,6 +35,7 @@ AgentKiln Memory is an evidence-only long-term memory service. It persists sourc
 - In-process concurrency limits: Add 16, Search 32.
 - Add returns only after the request is durably stored and immediately searchable.
 - Long Add messages are split for model calls while the original source is stored whole; larger requests may require multiple upstream calls.
+- Long Search queries are accepted; retrieval and model calls use up to 8,000 characters from the beginning and end of the query.
 - Production model endpoints require HTTPS, and malformed model vectors cannot be stored.
 
 ## Capacity declaration

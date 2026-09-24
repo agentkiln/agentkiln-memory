@@ -190,10 +190,10 @@ Unit and integration tests cover API contract, user isolation, persistence, conc
 }
 ```
 
-- `request_id`: unique identifier for deduplication and retry safety
-- `messages`: 1 to 200 messages, each with `role`, `content`, and optional Unix-millisecond `timestamp` (years 1-9999)
-- `user_id`: strict isolation boundary
-- `session_id`: conversation grouping for adjacent-turn expansion
+- `request_id`: unique identifier for deduplication and retry safety, at most 512 characters to limit PostgreSQL index key size
+- `messages`: one or more messages, each with `role`, `content`, and optional Unix-millisecond `timestamp` (years 1-9999)
+- `user_id`: strict isolation boundary, at most 512 characters to limit PostgreSQL index key size
+- `session_id`: conversation grouping for adjacent-turn expansion; no application-level length maximum
 
 ### Add response
 
@@ -217,8 +217,9 @@ Unit and integration tests cover API contract, user isolation, persistence, conc
 }
 ```
 
-- `query`: search text, 1 to 8000 characters
+- `query`: nonblank search text; long queries are accepted, with the first and last 8,000 characters in total used for retrieval and model calls
 - `options`: optional candidate options for option-match scoring
+- `user_id`: strict isolation boundary, at most 512 characters to limit PostgreSQL index key size
 - `top_k`: 1 to 100, maximum evidence windows returned
 
 ### Search response

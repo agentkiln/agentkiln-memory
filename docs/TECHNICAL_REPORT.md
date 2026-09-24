@@ -83,7 +83,7 @@ The SQLite backend uses WAL journaling, a 60-second busy timeout, and FTS5 with 
 
 ### 4.1 Add path
 
-1. Validate request fields, message count (1-200), identifier lengths (max 512 characters), and Unix-millisecond timestamps within years 1-9999.
+1. Validate required fields, a nonempty message list, supported roles, and Unix-millisecond timestamps within years 1-9999. `request_id` and `user_id` are capped at 512 characters to limit PostgreSQL index key size; `session_id` and message count have no application-level maximum.
 2. Check `request_id` status: new, existing (skip model calls), or conflict (HTTP 409).
 3. Annotate messages with an LLM call that extracts retrieval cues from the transcript.
 4. Embed message contents through the configured embedding provider in batches of at most 10, then check each batch's indexes, vector finiteness, and the combined dimensions.
@@ -91,7 +91,7 @@ The SQLite backend uses WAL journaling, a 60-second busy timeout, and FTS5 with 
 
 ### 4.2 Search path
 
-1. **Query analysis**: an LLM call extracts retrieval cues, facets, and temporal intent. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
+1. **Query analysis**: long queries are accepted, with up to 8,000 characters taken from the beginning and end for retrieval and model calls. An LLM call extracts retrieval cues, facets, and temporal intent. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
 2. **Lexical search**: FTS5 or PostgreSQL full-text search retrieves up to `AML_CANDIDATE_LIMIT` candidates using BM25 ranking. Single-character CJK queries remain searchable; SQLite also checks older source text within the same user when its previous index lacks the character.
 3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Vectors are filtered by exact user, embedding model, and dimension.
 4. **Fusion**: candidates from both channels are merged with `1 / (60 + rank)` scoring. A lexical-overlap filter suppresses vector-only candidates that share no meaningful terms with the query.

@@ -182,10 +182,10 @@ python scripts/privacy_scan.py --root .
 }
 ```
 
-- `request_id`：用于去重和重试安全的唯一标识
-- `messages`：1 到 200 条消息，每条包含 `role`、`content` 和可选的 Unix 毫秒时间戳 `timestamp`（年份范围 1-9999）
-- `user_id`：严格隔离边界
-- `session_id`：会话分组，用于邻接窗口扩展
+- `request_id`：用于去重和重试安全的唯一标识，最多 512 字符，以限制 PostgreSQL 索引键大小
+- `messages`：至少一条消息，每条包含 `role`、`content` 和可选的 Unix 毫秒时间戳 `timestamp`（年份范围 1-9999）
+- `user_id`：严格隔离边界，最多 512 字符，以限制 PostgreSQL 索引键大小
+- `session_id`：会话分组，用于邻接窗口扩展；应用未设置长度上限
 
 ### Add 响应
 
@@ -209,8 +209,9 @@ python scripts/privacy_scan.py --root .
 }
 ```
 
-- `query`：搜索文本，1 到 8000 字符
+- `query`：非空白搜索文本；长查询可以提交，模型调用和检索使用首尾合计最多 8000 字符
 - `options`：可选的候选项，用于选项匹配打分
+- `user_id`：严格隔离边界，最多 512 字符，以限制 PostgreSQL 索引键大小
 - `top_k`：1 到 100，返回证据窗口的最大数量
 
 ### Search 响应
