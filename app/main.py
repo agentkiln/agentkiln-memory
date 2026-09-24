@@ -56,169 +56,135 @@ ROOT_PAGE = """<!DOCTYPE html>
 <title>AgentKiln Memory — Evidence-only long-term memory for AI agents</title>
 <style>
   :root {
-    --bg: #070b14;
-    --panel: #0d1526;
-    --panel-2: #0a111f;
-    --line: #1a2745;
-    --line-2: #27395f;
-    --text: #f2f5fc;
-    --muted: #8b9ab8;
-    --accent: #6b9aff;
-    --accent-2: #3ee0b8;
-    --glow: rgba(107, 154, 255, 0.14);
+    color-scheme: light;
+    --bg: #f4f2eb;
+    --paper: #fffefa;
+    --ink: #1b332a;
+    --muted: #5e7167;
+    --line: #d9e0d6;
+    --forest: #235f4d;
+    --forest-deep: #173d34;
+    --sage: #dce9dc;
+    --clay: #aa5639;
+    --clay-light: #f6e8db;
     --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
+    margin: 0;
+    color: var(--ink);
+    background: radial-gradient(circle at 84% 2%, #e2ecdf 0, transparent 30%), var(--bg);
     font-family: "Segoe UI", system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    padding: 0 24px 56px;
-    position: relative;
-    overflow-x: hidden;
+    min-width: 320px;
   }
-  body::before {
-    content: "";
-    position: absolute; inset: 0;
-    background:
-      radial-gradient(800px 400px at 80% -10%, rgba(62, 224, 184, 0.06) 0%, transparent 60%),
-      radial-gradient(1100px 600px at 5% -15%, var(--glow) 0%, transparent 55%);
-    pointer-events: none;
+  a { color: inherit; }
+  a:focus-visible { outline: 3px solid var(--clay); outline-offset: 4px; }
+  .wrap { max-width: 1180px; margin: auto; padding: 0 30px; }
+  .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    padding: 24px 0; border-bottom: 1px solid var(--line);
   }
-  body::after {
-    content: "";
-    position: absolute; inset: 0;
-    background-image:
-      linear-gradient(rgba(107,154,255,0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(107,154,255,0.025) 1px, transparent 1px);
-    background-size: 56px 56px;
-    pointer-events: none;
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-mark {
+    display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto;
+    border-radius: 12px; background: var(--forest-deep); color: #e6b78b;
+    box-shadow: 0 7px 18px #173d3422;
   }
-  .wrap { max-width: 1080px; margin: 0 auto; position: relative; z-index: 1; }
-  header.top {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 24px 0; gap: 16px;
-  }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .logo {
-    width: 38px; height: 38px;
-    filter: drop-shadow(0 0 14px rgba(107, 154, 255, 0.35));
-  }
-  .brand b { font-size: 17px; font-weight: 700; display: block; }
-  .brand span { display: block; font-size: 11px; color: var(--muted); font-weight: 400; margin-top: 1px; }
-  nav.links { display: flex; gap: 6px; }
-  nav.links a {
-    color: var(--muted); text-decoration: none; font-size: 13px;
-    padding: 8px 14px; border-radius: 7px;
-    transition: color 0.2s, background 0.2s;
-  }
-  nav.links a:hover { color: var(--text); background: var(--panel); }
-  .hero { padding: 72px 0 56px; max-width: 780px; }
-  .status {
-    display: inline-flex; align-items: center; gap: 9px;
-    border: 1px solid var(--line-2); border-radius: 999px;
-    padding: 7px 16px; font-size: 12px; color: var(--accent-2);
-    background: rgba(62, 224, 184, 0.05); margin-bottom: 28px;
-  }
-  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2); animation: pulse 2.4s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(62,224,184,0.4); } 50% { opacity: 0.55; box-shadow: 0 0 0 6px rgba(62,224,184,0); } }
-  h1 {
-    font-size: clamp(34px, 5.4vw, 52px); font-weight: 780; letter-spacing: -1px;
-    line-height: 1.12; margin-bottom: 18px; max-width: 700px;
-  }
-  h1 .hl {
-    background: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 100%);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-  }
-  .tagline { color: var(--muted); font-size: 17px; line-height: 1.7; max-width: 580px; margin-bottom: 34px; }
-  .tagline strong { color: var(--text); font-weight: 600; }
-  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
-  .btn {
-    text-decoration: none; font-size: 14px; font-weight: 650;
-    padding: 12px 26px; border-radius: 9px;
-    transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
-    display: inline-flex; align-items: center; gap: 8px;
-  }
+  .brand-mark svg { width: 27px; height: 27px; }
+  .brand b { display: block; font-size: 17px; letter-spacing: -.025em; }
+  .brand small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .links { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+  .links a { font-size: 13px; font-weight: 650; text-decoration: none; padding: 9px 12px; border-radius: 8px; }
+  .links a:hover { background: #e7ede5; color: var(--forest); }
+  .links .nav-cta { background: var(--forest-deep); color: white; margin-left: 8px; padding: 10px 16px; }
+  .links .nav-cta:hover { background: var(--forest); color: white; }
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; align-items: center; gap: 6%; padding: 86px 0 76px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--forest); font: 700 11px var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+  .eyebrow::before { content: ""; width: 20px; height: 2px; background: var(--clay); }
+  h1 { max-width: 620px; font: 600 clamp(46px, 5.6vw, 72px)/1.04 Georgia, "Times New Roman", serif; letter-spacing: -.055em; margin: 24px 0; }
+  h1 em { color: var(--forest); font-style: italic; }
+  .tagline { max-width: 520px; color: var(--muted); font-size: 17px; line-height: 1.75; margin: 0 0 30px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 22px; border: 1px solid transparent; border-radius: 9px; text-decoration: none; font-size: 14px; font-weight: 700; transition: background .2s, transform .2s, box-shadow .2s; }
   .btn:hover { transform: translateY(-2px); }
-  .btn.primary { background: linear-gradient(135deg, var(--accent) 0%, #4a7dff 100%); color: #06101f; box-shadow: 0 4px 20px rgba(107, 154, 255, 0.25); }
-  .btn.primary:hover { box-shadow: 0 6px 28px rgba(107, 154, 255, 0.4); }
-  .btn.ghost { color: var(--text); border: 1px solid var(--line-2); }
-  .btn.ghost:hover { border-color: var(--accent); }
-  .stats {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px; max-width: 640px; margin-top: 40px;
+  .btn.primary { background: var(--forest-deep); color: white; box-shadow: 0 10px 24px #173d3426; }
+  .btn.primary:hover { background: var(--forest); box-shadow: 0 14px 26px #173d3436; }
+  .btn.ghost { background: var(--paper); border-color: var(--line); color: var(--forest-deep); }
+  .btn.ghost:hover { background: #e9eee8; }
+  .assurance { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 32px; color: var(--muted); font-size: 12px; }
+  .assurance span::before { content: "✓"; color: var(--forest); font-weight: 800; margin-right: 6px; }
+  .preview { position: relative; padding: 18px; border: 1px solid #b7cabc; border-radius: 24px; background: #e6ede3; box-shadow: 0 24px 70px #1b332a1b; transform: rotate(1deg); }
+  .preview::before { content: ""; position: absolute; inset: 20px -15px -15px 20px; border: 1px solid #c9d5c7; border-radius: 24px; background: #dce8dc; z-index: -1; transform: rotate(3deg); }
+  .preview-inner { overflow: hidden; border-radius: 15px; background: var(--paper); }
+  .preview-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--forest-deep); color: #f0f5ee; font: 12px var(--mono); }
+  .preview-head .dots { display: flex; gap: 5px; }
+  .preview-head i { display: block; width: 6px; height: 6px; border-radius: 50%; background: #c2d5c4; opacity: .7; }
+  .preview-body { padding: 20px; }
+  .preview-label { display: block; color: var(--muted); font: 700 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
+  .query { padding: 15px 16px; border: 1px solid var(--line); border-radius: 10px; background: #f7f8f4; font-size: 14px; line-height: 1.5; }
+  .preview-route { display: flex; align-items: center; gap: 10px; color: var(--forest); font: 700 11px var(--mono); margin: 17px 0; }
+  .preview-route::before { content: ""; height: 1px; flex: 1; background: var(--line); }
+  .preview-route::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+  .evidence { padding: 18px; border: 1px solid #bad1bd; border-left: 4px solid var(--forest); border-radius: 10px; background: #f0f7ef; }
+  .evidence p { margin: 10px 0 14px; font: 18px/1.45 Georgia, "Times New Roman", serif; }
+  .evidence footer { color: var(--muted); font: 11px var(--mono); }
+  .preview-note { color: var(--muted); font-size: 11px; margin: 13px 0 0; text-align: right; }
+  .process { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 0 0 82px; }
+  .process-step { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: #fffefaac; font-size: 13px; font-weight: 700; }
+  .process-step span { color: var(--clay); font: 700 11px var(--mono); }
+  .section { margin-bottom: 78px; }
+  .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+  .section-kicker { display: block; color: var(--clay); font: 700 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 9px; }
+  h2 { font: 600 clamp(30px, 3.3vw, 40px)/1.15 Georgia, "Times New Roman", serif; letter-spacing: -.035em; margin: 0; }
+  .section-intro { color: var(--muted); max-width: 430px; font-size: 14px; line-height: 1.65; margin: 0; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .card { min-height: 225px; padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 10px 30px #1b332a08; transition: transform .2s, box-shadow .2s; }
+  .card:hover { transform: translateY(-4px); box-shadow: 0 16px 35px #1b332a15; }
+  .card .num { display: inline-grid; place-items: center; width: 35px; height: 35px; border-radius: 9px; background: var(--clay-light); color: var(--clay); font: 700 12px var(--mono); margin-bottom: 24px; }
+  .card h3 { font-size: 16px; margin: 0 0 9px; }
+  .card p { color: var(--muted); font-size: 13px; line-height: 1.65; margin: 0; }
+  .api-section { padding: 34px; border-radius: 18px; background: var(--forest-deep); color: #f7faf5; }
+  .api-section .section-kicker { color: #e6b78b; }
+  .api-section .section-intro { color: #c6d7ce; }
+  .endpoints { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 24px; }
+  .ep-row { padding: 16px; border: 1px solid #598071; border-radius: 10px; background: #ffffff0a; }
+  .ep-method { display: inline-block; color: #f2c99d; font: 700 11px var(--mono); margin-right: 9px; }
+  .ep-method.get { color: #b5dec3; }
+  .ep-path { font: 700 14px var(--mono); }
+  .ep-desc { display: block; color: #c6d7ce; font-size: 12px; line-height: 1.5; margin-top: 10px; }
+  .site-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--line); padding: 25px 0 35px; color: var(--muted); font-size: 12px; }
+  .site-footer a { text-decoration: none; }
+  .site-footer a:hover { color: var(--forest); text-decoration: underline; }
+  @media (max-width: 950px) {
+    .hero { grid-template-columns: 1fr; gap: 46px; padding: 65px 0; }
+    .hero-copy { max-width: 680px; }
+    .preview { max-width: 620px; transform: none; }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .endpoints { grid-template-columns: 1fr; }
   }
-  .stat {
-    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .stat b { font-family: var(--mono); font-size: 20px; color: var(--accent-2); display: block; margin-bottom: 2px; }
-  .stat span { font-size: 12px; color: var(--muted); }
-  .flow {
-    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    margin: 56px 0; padding: 22px 26px;
-    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
-  }
-  .flow .step {
-    display: flex; align-items: center; gap: 10px;
-    font-family: var(--mono); font-size: 13px;
-  }
-  .flow .num {
-    width: 26px; height: 26px; border-radius: 6px;
-    background: linear-gradient(135deg, rgba(107,154,255,0.15), rgba(62,224,184,0.1));
-    border: 1px solid var(--line-2);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; color: var(--accent); font-weight: 700;
-  }
-  .flow .arrow { color: var(--line-2); font-size: 16px; }
-  .section-title {
-    font-size: 12px; text-transform: uppercase; letter-spacing: 2px;
-    color: var(--muted); margin-bottom: 18px; font-weight: 600;
-  }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
-  .card {
-    background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
-    border: 1px solid var(--line); border-radius: 10px; padding: 22px;
-    transition: border-color 0.2s, transform 0.2s;
-  }
-  .card:hover { border-color: var(--line-2); transform: translateY(-2px); }
-  .card .num { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 12px; opacity: 0.7; }
-  .card h3 { font-size: 15px; margin-bottom: 9px; font-weight: 650; }
-  .card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
-  .endpoints {
-    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
-    overflow: hidden; margin-bottom: 40px;
-  }
-  .ep-row {
-    display: grid; grid-template-columns: 70px 1fr 1fr; align-items: center;
-    padding: 15px 22px; border-bottom: 1px solid var(--line);
-    font-family: var(--mono); font-size: 13px; gap: 16px;
-  }
-  .ep-row:last-child { border-bottom: none; }
-  .ep-method {
-    color: var(--accent-2); font-weight: 700; font-size: 12px;
-    background: rgba(62, 224, 184, 0.08); border-radius: 5px;
-    padding: 4px 0; text-align: center;
-  }
-  .ep-method.get { color: var(--accent); background: rgba(107, 154, 255, 0.08); }
-  .ep-path { color: var(--text); }
-  .ep-desc { color: var(--muted); font-family: "Segoe UI", sans-serif; font-size: 13px; }
-  footer {
-    border-top: 1px solid var(--line); padding-top: 22px;
-    font-size: 12px; color: var(--muted);
-    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-  }
-  footer a { color: var(--muted); text-decoration: none; }
-  footer a:hover { color: var(--text); }
   @media (max-width: 640px) {
-    nav.links { display: none; }
-    .hero { padding: 32px 0 40px; }
-    .ep-row { grid-template-columns: 60px 1fr; }
-    .ep-desc { display: none; }
-    .stats { grid-template-columns: repeat(2, 1fr); }
+    .wrap { padding: 0 18px; }
+    .top { align-items: flex-start; flex-direction: column; gap: 14px; padding: 18px 0; }
+    .links { width: 100%; justify-content: space-between; }
+    .links a { padding: 8px 6px; font-size: 12px; }
+    .links .nav-cta { margin-left: 0; padding: 8px 10px; }
+    .hero { padding: 54px 0 62px; }
+    h1 { font-size: clamp(42px, 12vw, 58px); }
+    .tagline { font-size: 15px; }
+    .preview { padding: 10px; }
+    .preview::before { display: none; }
+    .process { grid-template-columns: repeat(2, 1fr); margin-bottom: 64px; }
+    .section { margin-bottom: 62px; }
+    .section-heading { display: block; }
+    .section-intro { margin-top: 14px; }
+    .grid { grid-template-columns: 1fr; }
+    .card { min-height: 0; }
+    .api-section { padding: 25px 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .btn, .card { transition: none; }
   }
 </style>
 </head>
@@ -226,57 +192,81 @@ ROOT_PAGE = """<!DOCTYPE html>
 <div class="wrap">
 <header class="top">
   <div class="brand">
-    <img class="logo" src="/logo.svg" alt="AgentKiln Memory">
-    <div><b>AgentKiln Memory</b><span>Evidence-only retrieval</span></div>
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 23V9l10 8 10-8v14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="6" cy="9" r="2" fill="currentColor"/><circle cx="16" cy="17" r="2" fill="currentColor"/><circle cx="26" cy="9" r="2" fill="currentColor"/>
+      </svg>
+    </span>
+    <div><b>AgentKiln Memory</b><small>Evidence-first agent memory</small></div>
   </div>
-  <nav class="links">
+  <nav class="links" aria-label="Main navigation">
     <a href="#how">How it works</a>
-    <a href="/docs">API Docs</a>
-    <a href="/openapi.json">OpenAPI</a>
+    <a href="#api">Endpoints</a>
+    <a class="nav-cta" href="/docs">API docs ↗</a>
   </nav>
 </header>
 <section class="hero">
-  <div class="status"><span class="pulse"></span> Service online</div>
-  <h1>Long-term memory that returns <span class="hl">evidence</span>, not answers.</h1>
-  <p class="tagline">Agent conversations are stored under <strong>strict user isolation</strong>, indexed with hybrid lexical and vector retrieval, and returned as <strong>verbatim source windows</strong>. Every result is auditable, every retrieval is testable.</p>
-  <div class="cta">
-    <a class="btn primary" href="/docs">Explore the API</a>
-    <a class="btn ghost" href="/openapi.json">OpenAPI Schema</a>
+  <div class="hero-copy">
+    <span class="eyebrow">Memory infrastructure for agents</span>
+    <h1>The answer starts with <em>evidence.</em></h1>
+    <p class="tagline">Keep conversation history searchable and give agents the exact source behind a memory. AgentKiln Memory combines lexical and vector retrieval, then returns ranked conversation windows for the caller.</p>
+    <div class="cta">
+      <a class="btn primary" href="/docs">Explore the API →</a>
+      <a class="btn ghost" href="#how">See how it works</a>
+    </div>
+    <div class="assurance" aria-label="Service properties">
+      <span>Isolated by user</span><span>Searchable after Add</span><span>Source windows</span>
+    </div>
   </div>
-  <div class="stats">
-    <div class="stat"><b>&lt;100ms</b><span>Lexical search latency</span></div>
-    <div class="stat"><b>100%</b><span>User isolation</span></div>
-    <div class="stat"><b>76</b><span>Tests passing</span></div>
+  <div class="preview" aria-label="Illustrative search result">
+    <div class="preview-inner">
+      <div class="preview-head"><span>MEMORY / SEARCH</span><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <div class="preview-body">
+        <span class="preview-label">Question</span>
+        <div class="query">What tea did I choose last time?</div>
+        <div class="preview-route">ranked source</div>
+        <div class="evidence">
+          <span class="preview-label">Conversation evidence</span>
+          <p>I chose jasmine tea again.</p>
+          <footer>session / message / source window</footer>
+        </div>
+        <p class="preview-note">Illustrative result · your data stays scoped to its user</p>
+      </div>
+    </div>
   </div>
 </section>
-<div class="flow">
-  <div class="step"><span class="num">1</span> Add</div>
-  <span class="arrow">→</span>
-  <div class="step"><span class="num">2</span> Index</div>
-  <span class="arrow">→</span>
-  <div class="step"><span class="num">3</span> Search</div>
-  <span class="arrow">→</span>
-  <div class="step"><span class="num">4</span> Evidence</div>
+<div class="process" aria-label="Memory workflow">
+  <div class="process-step"><span>01</span> Add conversations</div>
+  <div class="process-step"><span>02</span> Index memories</div>
+  <div class="process-step"><span>03</span> Search context</div>
+  <div class="process-step"><span>04</span> Return evidence</div>
 </div>
 <section class="section" id="how">
-  <div class="section-title">How it works</div>
+  <div class="section-heading">
+    <div><span class="section-kicker">Built for reliable retrieval</span><h2>From conversation to context.</h2></div>
+    <p class="section-intro">The service stores messages, finds relevant passages, and returns the surrounding turns an agent needs to judge them.</p>
+  </div>
   <div class="grid">
-    <div class="card"><div class="num">01</div><h3>Hybrid retrieval</h3><p>Lexical FTS5 search fused with vector cosine similarity by reciprocal rank. Exact terms and semantic matches both surface.</p></div>
+    <div class="card"><div class="num">01</div><h3>Hybrid retrieval</h3><p>Lexical and vector candidates bring exact terms and semantic matches into one ranked result set.</p></div>
     <div class="card"><div class="num">02</div><h3>Session windows</h3><p>Matched evidence expands to adjacent turns in the same conversation, restoring context a single message loses.</p></div>
     <div class="card"><div class="num">03</div><h3>Temporal ranking</h3><p>Time-aware scoring detects latest and earliest intent, with correction-aware suppression of superseded memories.</p></div>
-    <div class="card"><div class="num">04</div><h3>Strict isolation</h3><p>Every memory, index entry, and vector is scoped to the exact caller identity. Cross-user access returns empty.</p></div>
+    <div class="card"><div class="num">04</div><h3>Strict isolation</h3><p>Memories and retrieval are scoped to the exact user ID so evidence stays with its owner.</p></div>
   </div>
 </section>
-<section class="section">
-  <div class="section-title">Endpoints</div>
+<section class="section api-section" id="api">
+  <div class="section-heading">
+    <div><span class="section-kicker">Simple interface</span><h2>Three endpoints. Clear purpose.</h2></div>
+    <p class="section-intro">Add messages synchronously, search for ranked evidence, and check service readiness.</p>
+  </div>
   <div class="endpoints">
-    <div class="ep-row"><span class="ep-method">POST</span><span class="ep-path">/add</span><span class="ep-desc">Store messages with idempotency and conflict detection</span></div>
-    <div class="ep-row"><span class="ep-method">POST</span><span class="ep-path">/search</span><span class="ep-desc">Retrieve ranked evidence without generating answers</span></div>
-    <div class="ep-row"><span class="ep-method get">GET</span><span class="ep-path">/health</span><span class="ep-desc">Service health, version, and model readiness</span></div>
+    <div class="ep-row"><span class="ep-method">POST</span><span class="ep-path">/add</span><span class="ep-desc">Store messages with idempotency and conflict detection.</span></div>
+    <div class="ep-row"><span class="ep-method">POST</span><span class="ep-path">/search</span><span class="ep-desc">Retrieve ranked evidence without generating answers.</span></div>
+    <div class="ep-row"><span class="ep-method get">GET</span><span class="ep-path">/health</span><span class="ep-desc">Inspect service health and model readiness.</span></div>
   </div>
 </section>
-<footer>
-  <span>AgentKiln Memory · Evidence-only long-term memory service</span>
+<footer class="site-footer">
+  <span>AgentKiln Memory · Evidence-first memory for AI agents</span>
   <span><a href="/docs">Docs</a> · <a href="/openapi.json">OpenAPI</a> · <a href="/health">Health</a></span>
 </footer>
 </div>
