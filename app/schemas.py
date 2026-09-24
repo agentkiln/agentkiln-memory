@@ -23,10 +23,11 @@ class MemoryMessage(BaseModel):
 class AddRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # PostgreSQL B-tree indexes include these identifiers; very large keys can fail at write time.
     request_id: str = Field(min_length=1, max_length=512)
-    messages: list[MemoryMessage] = Field(min_length=1, max_length=200)
+    messages: list[MemoryMessage] = Field(min_length=1)
     user_id: str = Field(min_length=1, max_length=512)
-    session_id: str = Field(min_length=1, max_length=512)
+    session_id: str = Field(min_length=1)
 
     def payload_hash(self) -> str:
         payload = {
@@ -54,8 +55,8 @@ class AddResponse(BaseModel):
 class SearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    query: str = Field(min_length=1, max_length=8_000)
-    options: list[str] | None = Field(default=None, max_length=100)
+    query: str = Field(min_length=1)
+    options: list[str] | None = None
     user_id: str = Field(min_length=1, max_length=512)
     top_k: int = Field(ge=1, le=100)
 
@@ -64,15 +65,6 @@ class SearchRequest(BaseModel):
     def query_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("query must not be blank")
-        return value
-
-    @field_validator("options")
-    @classmethod
-    def options_must_be_bounded(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return value
-        if any(len(option) > 2_000 for option in value):
-            raise ValueError("each option must be at most 2000 characters")
         return value
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import threading
 from collections import defaultdict
 
@@ -22,6 +24,16 @@ from .text import (
 
 
 QWEN37_RERANK_MAX_DOCUMENTS = 500
+SEARCH_QUERY_MAX_CHARS = 8_000
+SEARCH_QUERY_TAIL_CHARS = 6_000
+SEARCH_QUERY_PRIORITY_CHARS = 512
+
+
+def _bounded_search_query(query: str) -> str:
+    if len(query) <= SEARCH_QUERY_MAX_CHARS:
+        return query
+    head_length = SEARCH_QUERY_MAX_CHARS - SEARCH_QUERY_TAIL_CHARS - 1
+    return f"{query[:head_length]}\n{query[-SEARCH_QUERY_TAIL_CHARS:]}"
 
 
 class MemoryService:
@@ -64,11 +76,15 @@ class MemoryService:
 
     def _search_unlocked(self, request: SearchRequest) -> list[SearchItem]:
         revision = self.database.revision(request.user_id)
+        input_digest = hashlib.sha256(
+            json.dumps(
+                [request.query, request.options], ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+        ).digest()
         cache_key = (
             "v1",
             request.user_id,
-            request.query,
-            tuple(request.options or ()),
+            input_digest,
             request.top_k,
             revision,
             self.settings.llm_mode,
@@ -88,21 +104,26 @@ class MemoryService:
         if cached is not None:
             return [item.model_copy() for item in cached]
 
-        plan = self.llm.analyze_query(request.query, request.options)
-        query_text = " ".join(
-            [request.query]
-            + plan.terms
-            + plan.facets
-            + semantic_terms(request.query, limit=96)
-        )
-        query_terms = lexical_terms(query_text, limit=160)
+        search_query = _bounded_search_query(request.query)
+        plan = self.llm.analyze_query(search_query, request.options)
+        if len(request.query) > SEARCH_QUERY_MAX_CHARS:
+            query_parts = (
+                [search_query[-SEARCH_QUERY_PRIORITY_CHARS:]]
+                + plan.terms
+                + plan.facets
+                + semantic_terms(search_query, limit=96)
+                + [search_query]
+            )
+        else:
+            query_parts = [search_query] + plan.terms + plan.facets + semantic_terms(search_query, limit=96)
+        query_terms = lexical_terms(" ".join(query_parts), limit=160)
         query = fts_query(query_terms)
         lexical_rows = self.database.lexical_search(
             request.user_id,
             query,
             self.settings.candidate_limit,
         )
-        query_vector = self.llm.embed_texts([request.query])[0]
+        query_vector = self.llm.embed_texts([search_query])[0]
         vector_rows = self.database.vector_search(
             request.user_id,
             query_vector,
@@ -128,11 +149,11 @@ class MemoryService:
         candidates = self._expand_neighbors(request.user_id, candidates)
         if not candidates:
             return []
-        intent = plan.intent if plan.intent != "none" else temporal_intent(request.query)
+        intent = plan.intent if plan.intent != "none" else temporal_intent(search_query)
         if intent != "earliest":
             candidates = self._suppress_superseded(candidates)
         ordered = self._rank(
-            request.query,
+            search_query,
             request.options or [],
             candidates,
             intent,
@@ -148,7 +169,7 @@ class MemoryService:
             else ordered
         )
         rerank_scores = (
-            self.llm.rerank(request.query, [row.content for _score, row in rerank_pool])
+            self.llm.rerank(search_query, [row.content for _score, row in rerank_pool])
             if intent == "none"
             else None
         )

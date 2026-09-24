@@ -11,7 +11,7 @@ from app.config import Settings
 from app.db import MemoryRow
 from app.llm import MemoryLLM, QueryPlan
 from app.main import create_app
-from app.schemas import SearchRequest
+from app.schemas import AddRequest, SearchRequest
 from app.service import MemoryService
 
 
@@ -726,31 +726,78 @@ def test_search_cache_invalidates_when_add_concurrency_changes(tmp_path: Path) -
     assert second["data"]
 
 
-def test_identifier_fields_reject_unbounded_values(tmp_path: Path) -> None:
+def test_indexed_identifiers_are_bounded_but_long_session_is_accepted(tmp_path: Path) -> None:
     client = TestClient(create_app(settings(tmp_path)))
     payload = add_payload()
-    payload["request_id"] = "x" * 513
+    payload["request_id"] = "r" * 513
     assert client.post("/add", json=payload).status_code == 422
     payload = add_payload()
     payload["user_id"] = "u" * 513
     assert client.post("/add", json=payload).status_code == 422
+    payload = add_payload()
+    payload["session_id"] = "s" * 513
+    assert client.post("/add", json=payload).status_code == 200
+    found = client.post(
+        "/search",
+        json={"query": "jasmine tea", "user_id": "user-a", "top_k": 5},
+    )
+    assert found.status_code == 200
+    assert any("jasmine tea" in item["content"] for item in found.json()["data"])
 
 
-def test_add_rejects_oversized_message_batch(tmp_path: Path) -> None:
+def test_add_accepts_large_message_batch(tmp_path: Path) -> None:
     client = TestClient(create_app(settings(tmp_path)))
     payload = add_payload()
     payload["messages"] = [
         {"role": "user", "content": f"memory item {index}"} for index in range(201)
     ]
-    assert client.post("/add", json=payload).status_code == 422
-
-
-def test_search_rejects_oversized_query_and_options(tmp_path: Path) -> None:
-    client = TestClient(create_app(settings(tmp_path)))
-    assert client.post(
+    payload["messages"][-1]["content"] = "The recovery phrase is cobalt lantern."
+    assert client.post("/add", json=payload).status_code == 200
+    found = client.post(
         "/search",
-        json={"query": "q" * 8_001, "user_id": "user-a", "top_k": 5},
-    ).status_code == 422
+        json={"query": "recovery phrase cobalt lantern", "user_id": "user-a", "top_k": 5},
+    )
+    assert found.status_code == 200
+    assert any("cobalt lantern" in item["content"] for item in found.json()["data"])
+
+
+def test_search_accepts_long_query_with_question_at_the_end(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    assert client.post("/add", json=add_payload()).status_code == 200
+    query = " ".join(f"noise{index:04d}" for index in range(1_000))
+    query += " What drink do I prefer?"
+    assert len(query) > 8_000
+    response = client.post(
+        "/search",
+        json={"query": query, "user_id": "user-a", "top_k": 5},
+    )
+    assert response.status_code == 200
+    assert any("jasmine tea" in item["content"] for item in response.json()["data"])
+
+
+def test_long_query_sent_to_models_is_bounded_and_keeps_both_ends(tmp_path: Path) -> None:
+    service = MemoryService(settings(tmp_path))
+    service.initialize()
+    service.add(AddRequest(**add_payload()))
+    query = "What drink " + ("background " * 1_000) + "What drink do I prefer?"
+    assert len(query) > 8_000
+    try:
+        with (
+            patch.object(service.llm, "analyze_query", wraps=service.llm.analyze_query) as analyze,
+            patch.object(service.llm, "embed_texts", wraps=service.llm.embed_texts) as embed,
+            patch.object(service.llm, "rerank", wraps=service.llm.rerank) as rerank,
+        ):
+            service.search(SearchRequest(query=query, user_id="user-a", top_k=5))
+        model_queries = [
+            analyze.call_args.args[0],
+            embed.call_args.args[0][0],
+            rerank.call_args.args[0],
+        ]
+        assert all(len(value) <= 8_000 for value in model_queries)
+        assert all(value.startswith("What drink ") for value in model_queries)
+        assert all(value.endswith("What drink do I prefer?") for value in model_queries)
+    finally:
+        service.close()
 
 
 def test_options_do_not_override_query_evidence(tmp_path: Path) -> None:
@@ -794,24 +841,22 @@ def test_search_scores_are_bounded_and_ordered(tmp_path: Path) -> None:
     scores = [item["score"] for item in items]
     assert all(score is not None and 0.0 <= score <= 1.0 for score in scores)
     assert scores == sorted(scores, reverse=True)
-    assert client.post(
+
+
+def test_search_accepts_many_long_options(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    assert client.post("/add", json=add_payload()).status_code == 200
+    long_options = client.post(
         "/search",
         json={
-            "query": "bounded",
-            "options": ["x" * 2_001],
+            "query": "jasmine tea",
+            "options": ["background " * 250] + ["choice"] * 100,
             "user_id": "user-a",
             "top_k": 5,
         },
-    ).status_code == 422
-    assert client.post(
-        "/search",
-        json={
-            "query": "bounded",
-            "options": ["option"] * 101,
-            "user_id": "user-a",
-            "top_k": 5,
-        },
-    ).status_code == 422
+    )
+    assert long_options.status_code == 200
+    assert any("jasmine tea" in item["content"] for item in long_options.json()["data"])
 
 
 def test_implicit_recency_prefers_newer_state_when_dates_are_available(tmp_path: Path) -> None:

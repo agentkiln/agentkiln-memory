@@ -27,6 +27,8 @@ EMBEDDING_OTHER_BATCH_MAX_BYTES = 8000
 ANNOTATION_FRAGMENT_MAX_BYTES = 2048
 ANNOTATION_BATCH_MAX_BYTES = 32 * 1024
 ANNOTATION_BATCH_MAX_ITEMS = 16
+QUERY_ANALYSIS_OPTIONS_MAX_CHARS = 4_000
+QUERY_ANALYSIS_OPTIONS_MAX_ITEMS = 128
 
 
 @dataclass(frozen=True)
@@ -319,7 +321,13 @@ class MemoryLLM:
                             "and temporal_intent. temporal_intent is one of none, latest, earliest. Do not choose options."
                         ),
                     },
-                    {"role": "user", "content": json.dumps({"query": query, "options": options}, ensure_ascii=False)},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"query": query, "options": self._analysis_options(options)},
+                            ensure_ascii=False,
+                        ),
+                    },
                 ],
             },
         )
@@ -332,6 +340,24 @@ class MemoryLLM:
             facets=self._string_list(parsed.get("facets", []) if isinstance(parsed, dict) else [], 12),
             intent=intent,
         )
+
+    @staticmethod
+    def _analysis_options(options: list[str] | None) -> list[str] | None:
+        if options is None:
+            return None
+        if len(options) <= QUERY_ANALYSIS_OPTIONS_MAX_ITEMS and sum(map(len, options)) <= QUERY_ANALYSIS_OPTIONS_MAX_CHARS:
+            return options
+        if len(options) > QUERY_ANALYSIS_OPTIONS_MAX_ITEMS:
+            last = len(options) - 1
+            slots = QUERY_ANALYSIS_OPTIONS_MAX_ITEMS - 1
+            options = [options[index * last // slots] for index in range(QUERY_ANALYSIS_OPTIONS_MAX_ITEMS)]
+        per_option = QUERY_ANALYSIS_OPTIONS_MAX_CHARS // len(options)
+        return [
+            option if len(option) <= per_option else (
+                option[:per_option // 2] + option[-(per_option - per_option // 2):]
+            )
+            for option in options
+        ]
 
     def _post(
         self,

@@ -69,6 +69,25 @@ def test_post_retries_transient_failure(tmp_path: Path) -> None:
     assert calls == 2
 
 
+def test_query_analysis_compacts_long_options_without_rejecting_them(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    options = ["prefix-" + ("x" * 5_000) + "-suffix"] + [
+        f"choice-{index}" for index in range(100)
+    ]
+    response = {
+        "choices": [
+            {"message": {"content": '{"terms": [], "facets": [], "temporal_intent": "none"}'}}
+        ]
+    }
+    with patch.object(llm, "_post", return_value=response) as post:
+        llm.analyze_query("Which choice did I make?", options)
+    model_input = json.loads(post.call_args.args[1]["messages"][1]["content"])
+    assert len(model_input["options"]) == len(options)
+    assert sum(len(option) for option in model_input["options"]) <= 4_000
+    assert model_input["options"][0].startswith("prefix-")
+    assert model_input["options"][0].endswith("-suffix")
+
+
 @pytest.mark.parametrize(
     ("base_url", "expected_origin"),
     [
