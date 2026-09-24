@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import hmac
+import logging
+import re
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 
 from . import __version__
 from .config import Settings
@@ -11,6 +15,35 @@ from .llm import LLMUnavailable
 from .logging_setup import configure_uvicorn_timestamps
 from .schemas import AddRequest, AddResponse, HealthResponse, SearchRequest, SearchResponse
 from .service import MemoryService
+
+
+validation_logger = logging.getLogger("uvicorn.error")
+SAFE_VALIDATION_FIELD = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}\Z")
+SENSITIVE_FIELD_NAME = re.compile(r"secret|token|key|password|credential|authorization", re.I)
+
+
+def _validation_field(value: object) -> str:
+    if isinstance(value, int):
+        return f"[{value}]" if 0 <= value < 10_000 else "[index]"
+    if isinstance(value, str) and SAFE_VALIDATION_FIELD.fullmatch(value):
+        if not SENSITIVE_FIELD_NAME.search(value):
+            return value
+    return "<redacted>"
+
+
+def _validation_error_labels(exc: RequestValidationError) -> str:
+    errors = exc.errors()
+    labels = []
+    for error in errors[:12]:
+        location = error.get("loc") or ()
+        field = ".".join(_validation_field(part) for part in location)
+        kind = error.get("type", "unknown")
+        if not isinstance(kind, str) or not SAFE_VALIDATION_FIELD.fullmatch(kind):
+            kind = "unknown"
+        labels.append(f"{field or 'unknown'}:{kind}")
+    if len(errors) > 12:
+        labels.append(f"{len(errors) - 12}_more")
+    return ",".join(labels)
 
 
 # Root page HTML for the deployed service. Kept as a module-level constant so the
@@ -266,6 +299,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             service.close()
 
     app = FastAPI(title="AgentKiln Memory", version=__version__, lifespan=lifespan)
+
+    @app.exception_handler(RequestValidationError)
+    async def log_request_validation(request: Request, exc: RequestValidationError):
+        if request.url.path in {"/add", "/search", "/v1/memory/add", "/v1/memory/search"}:
+            client = request.client
+            address = f"{client.host}:{client.port}" if client else "unknown"
+            validation_logger.warning(
+                "request validation failed client=%s method=%s path=%s status=422 fields=%s",
+                address,
+                request.method,
+                request.url.path,
+                _validation_error_labels(exc),
+            )
+        return await request_validation_exception_handler(request, exc)
 
     def authorize(
         authorization: str | None = Header(default=None),

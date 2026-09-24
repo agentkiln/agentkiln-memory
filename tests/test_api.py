@@ -1,4 +1,5 @@
 import io
+import logging
 from dataclasses import replace
 from pathlib import Path
 import urllib.error
@@ -141,6 +142,34 @@ def test_top_k_and_options_contract(tmp_path: Path) -> None:
     ).json()["data"]
     assert len(result) == 1
     assert "jasmine tea" in result[0]["content"]
+
+
+def test_search_validation_logs_field_types_without_request_values(tmp_path: Path, caplog) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+        response = client.post(
+            "/search",
+            json={
+                "query": "private search text",
+                "user_id": "private-user-id",
+                "top_k": 101,
+                "mystery_field": "sk-private-api-key",
+            },
+        )
+
+    assert response.status_code == 422
+    validation_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if "request validation failed" in record.getMessage()
+    ]
+    assert len(validation_logs) == 1
+    assert "path=/search" in validation_logs[0]
+    assert "body.top_k:less_than_equal" in validation_logs[0]
+    assert "body.mystery_field:extra_forbidden" in validation_logs[0]
+    assert "private search text" not in validation_logs[0]
+    assert "private-user-id" not in validation_logs[0]
+    assert "sk-private-api-key" not in validation_logs[0]
 
 
 def test_rerank_changes_search_output_order(tmp_path: Path) -> None:
