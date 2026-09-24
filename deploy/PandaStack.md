@@ -76,6 +76,12 @@ PANDASTACK_API_KEY = pds_...
 
 Create that token under PandaStack API Tokens. After that, `git push origin master` triggers a redeploy automatically.
 
+## Free-tier deploy headroom
+
+PandaStack provisions a new App sandbox before switching traffic to a deployment. An App sandbox uses a fixed 4 GiB RAM and 8 vCPU; changing an App's `cpu` or `memory_mb` does not resize it. If a workspace has a 10 GiB aggregate memory cap and 8 GiB is already committed, the next 4 GiB deploy sandbox fails with `429 workspace resource quota exceeded` before the build begins.
+
+Check which Apps, databases, and sandboxes are active before retrying. At least 4 GiB of memory quota must be free for the new sandbox. Let an idle App hibernate, allow an idle PostgreSQL database to auto-suspend, or hibernate an unused sandbox. These actions release compute quota without deleting the managed database. Once enough capacity is free, retry the deployment from PandaStack or trigger the GitHub workflow manually. Repeated retries without freeing capacity will hit the same quota error.
+
 ## Verify
 
 ```bash

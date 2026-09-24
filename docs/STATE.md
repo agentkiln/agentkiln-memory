@@ -74,6 +74,7 @@ These checks predate the current code changes. The updated deployment has not be
 
 - Platform-issued Eval Key and public Smoke.
 - PandaStack deployment and remote verification of the current code changes.
+- A PandaStack deploy attempt failed during sandbox provisioning with `429 workspace resource quota exceeded`: 8 GiB committed of 10 GiB, with another 4 GiB requested. Free at least 2 GiB of committed memory before retrying; the App sandbox itself remains fixed at 4 GiB.
 - Docker image build and container restart verification on a machine with a running Docker daemon.
 - Search latency and memory use against a PostgreSQL dataset at expected competition scale; the current vector path reads all of a user's vectors for similarity scoring.
 - Official score.
