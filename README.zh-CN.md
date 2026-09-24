@@ -151,7 +151,7 @@ pytest -q
 python scripts/privacy_scan.py --root .
 ```
 
-73 个单元测试和集成测试覆盖 API 契约、用户隔离、持久化、并发、时间检索和工具验证。
+单元测试和集成测试覆盖 API 契约、用户隔离、持久化、并发、时间检索、模型调用和工具验证。
 
 ## API 说明
 
@@ -250,11 +250,11 @@ python scripts/privacy_scan.py --root .
 
 2. **词法搜索**：SQLite FTS5 或 PostgreSQL 全文搜索，使用 BM25 排序、Unicode 规范化、Porter 分词和 CJK n-gram。
 
-3. **向量搜索**：查询嵌入后与存储向量比较余弦相似度，只考虑相同嵌入模型和相同维度的向量。
+3. **向量搜索**：查询嵌入后与存储向量比较余弦相似度，只考虑相同嵌入模型和相同维度的向量。写入时每次最多发送 10 条文本，符合 `text-embedding-v4` 的批量限制。
 
 4. **倒数排序融合**：两个候选列表按 `1 / (60 + rank)` 评分合并，然后按最小相似度阈值过滤。
 
-5. **窗口扩展与排序**：匹配候选扩展为包含同一会话相邻消息的窗口。排序模型结合词覆盖、选项匹配、短语加成和时间意图产生最终有序证据窗口。
+5. **窗口扩展与排序**：匹配候选扩展为包含同一会话相邻消息的窗口。规则排序结合词覆盖、选项匹配、短语匹配和时间意图。没有时间意图的查询会使用已配置的重排序模型决定最终证据顺序；调用 `qwen3.7-text-rerank` 时，从规则排序结果中最多选取 500 条候选。模型暂时不可用时使用规则排序，并在下次搜索时重试。询问最早或最新记录时，保留按时间排序的规则逻辑。
 
 ## 配置项
 
@@ -271,14 +271,19 @@ python scripts/privacy_scan.py --root .
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-v4` | 嵌入模型 |
 | `OPENAI_EMBEDDING_BASE_URL` | 回退到 `OPENAI_BASE_URL` | 可选的独立嵌入端点 |
 | `OPENAI_EMBEDDING_API_KEY` | 回退到 `OPENAI_API_KEY` | 可选的独立嵌入凭据 |
+| `RERANK_MODEL` | 空 | 可选的重排序模型；留空则关闭 |
+| `RERANK_BASE_URL` | 回退到嵌入服务地址 | 重排序接口或 base URL |
+| `RERANK_API_KEY` | 回退到嵌入服务密钥 | 可选的独立重排序凭据 |
 | `AML_TIMEOUT_SECONDS` | `90` | 上游超时 |
-| `AML_CANDIDATE_LIMIT` | `300` | 排序前候选数量上限 |
+| `AML_CANDIDATE_LIMIT` | `300` | 每个检索通道在融合前的候选数量上限 |
 | `AML_MAX_OUTPUT_TOKENS` | `8000` | 证据 token 预算 |
 | `AML_MAX_OUTPUT_ITEMS` | `24` | 返回证据窗口最大数量 |
 | `AML_VECTOR_MIN_SIMILARITY` | `0.35` | 仅向量候选的最小相似度 |
 | `AML_VECTOR_ONLY_MIN_SIMILARITY` | `0.65` | 词法无候选时更严格的阈值 |
 | `AML_SEARCH_CONCURRENCY` | `32` | 进程内 Search 最大并发 |
 | `AML_ADD_CONCURRENCY` | `16` | 进程内 Add 最大并发 |
+
+使用 `qwen3.7-text-rerank` 时，`RERANK_BASE_URL` 可以填写以 `/api/v1/services/rerank/text-rerank/text-rerank` 结尾的阿里云完整接口地址。服务会使用该模型要求的嵌套 `input` 请求和 `output.results` 响应格式。
 
 ## 部署
 
@@ -322,7 +327,7 @@ python scripts/release_check.py \
 pytest -q
 ```
 
-73 个单元测试和集成测试覆盖：
+单元测试和集成测试覆盖：
 
 - API 契约与响应 schema 校验
 - 严格用户隔离与跨用户访问拒绝
@@ -353,7 +358,7 @@ agentkiln-memory/
 │   ├── ops_contract.py  # 公开契约检查
 │   ├── recovery_check.py # 容器重启恢复检查
 │   └── release_check.py # 提交就绪检查
-├── tests/               # 73 个单元测试和集成测试
+├── tests/               # 单元测试和集成测试
 ├── deploy/              # 生产部署指南
 ├── docs/                # 项目状态与提交材料
 ├── .github/workflows/   # CI 与部署自动化

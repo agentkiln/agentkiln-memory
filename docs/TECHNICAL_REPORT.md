@@ -26,7 +26,7 @@ Unicode normalization (NFKC), Porter stemming for English, and character n-gram 
 
 ### 2.5 Deterministic ranking with optional rerank
 
-The default ranking model combines six weighted signals: term coverage, RRF order, expanded-term coverage, option matches, phrase bonuses, and temporal intent. All signals are deterministic and testable. An optional external reranker can replace or supplement this ordering; when the reranker is unavailable, the system falls back to rule-based ranking without failing the request.
+The default ranking model combines six weighted signals: term coverage, RRF order, expanded-term coverage, option matches, phrase bonuses, and temporal intent. All signals are deterministic and testable. For queries without temporal intent, a configured external reranker orders the final evidence; when it is unavailable, Search uses rule-based ranking and retries the reranker on the next request. Earliest and latest queries keep time-aware rule ranking so historical evidence is retained.
 
 ## 3. Architecture
 
@@ -86,7 +86,7 @@ The SQLite backend uses WAL journaling, a 60-second busy timeout, and FTS5 with 
 1. Validate request fields, message count (1-200), and identifier lengths (max 512 characters).
 2. Check `request_id` status: new, existing (skip model calls), or conflict (HTTP 409).
 3. Annotate messages with an LLM call that extracts retrieval cues from the transcript.
-4. Embed message contents through the configured embedding provider.
+4. Embed message contents through the configured embedding provider in batches of at most 10, then check each batch's indexes and the combined vector dimensions.
 5. Persist messages, annotations, vectors, and FTS index entries in a single transaction. A failed write leaves no partial rows searchable.
 
 ### 4.2 Search path
@@ -96,8 +96,8 @@ The SQLite backend uses WAL journaling, a 60-second busy timeout, and FTS5 with 
 3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Vectors are filtered by exact user, embedding model, and dimension.
 4. **Fusion**: candidates from both channels are merged with `1 / (60 + rank)` scoring. A lexical-overlap filter suppresses vector-only candidates that share no meaningful terms with the query.
 5. **Window expansion**: matched candidates expand to adjacent turns in the same session using source-order keys.
-6. **Ranking**: a weighted combination of term coverage (0.42), RRF order (0.18), expanded coverage (0.14), option matches (0.10), phrase bonus (0.08), and temporal intent (0.12) produces the final ordering. An optional reranker can replace this ordering.
-7. **Packing**: evidence windows are packed into a token budget with source deduplication. Unknown packed source IDs are skipped rather than failing the request.
+6. **Ranking**: a weighted combination of term coverage (0.40), fused-rank order (0.16), expanded coverage (0.12), option matches (0.10), phrase bonus (0.06), and temporal intent (up to 0.16) produces the rule order. For non-temporal queries, a successful reranker call supplies the final ordering scores. The `qwen3.7-text-rerank` call takes at most 500 top rule-ranked candidates; any remainder stays after them in rule order.
+7. **Packing**: evidence windows are packed into a token budget with source deduplication. A returned source ID identifies a source included in its evidence window; unknown packed source IDs are skipped rather than failing the request.
 
 ### 4.3 Token budgeting
 
@@ -133,7 +133,7 @@ Add and Search concurrency are bounded by in-process semaphores, configurable th
 
 ### 7.1 Test coverage
 
-76 unit and integration tests cover API contract validation, user isolation, idempotent Add, payload conflict detection, persistence across restarts, concurrent operations, temporal retrieval, CJK tokenization, provider resilience, and packing robustness.
+Unit and integration tests cover API contract validation, user isolation, idempotent Add, payload conflict detection, persistence across restarts, concurrent operations, temporal retrieval, CJK tokenization, provider resilience, rerank ordering, and packing robustness.
 
 ### 7.2 Offline evaluation
 
@@ -175,7 +175,7 @@ Local end-to-end verification with 24 concurrent synchronous Add calls completed
 1. **Memory governance**: the system does not actively resolve conflicts when a source message updates or corrects an earlier one. Retrieval relies on temporal intent scoring and update markers to prefer newer values, but this is heuristic rather than a dedicated conflict-resolution layer.
 2. **Ranking weights**: the six-signal weighted combination has not been tuned against an external evaluation benchmark. The weights are reasonable defaults based on retrieval-system best practice, not empirically optimized values.
 3. **Vector index**: the current implementation uses exact cosine similarity over stored vectors rather than an approximate nearest neighbor index. This is acceptable at the candidate limit of 300 but would need an ANN index for much larger corpora.
-4. **Rerank latency**: the optional reranker adds one upstream call per Search, increasing latency from approximately 4 seconds to 6 seconds in the live configuration. The reranker can be disabled via configuration when latency matters more than ordering quality.
+4. **Rerank latency**: for non-temporal queries, the optional reranker adds one upstream call per uncached Search. This increases latency and must be measured against retrieval quality on a representative local panel before changing its use or ranking weights.
 5. **No semantic deduplication**: source deduplication is by memory ID. Semantically identical memories from different sessions are not merged.
 
 ## 10. AI-Assisted Development

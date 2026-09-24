@@ -8,7 +8,7 @@ Complete the personal contact fields before submitting. Do not include secrets i
 
 - Participant division: Open-source Methods
 - System name: AgentKiln Memory
-- Version: 1.1.0
+- Version: 1.0.0
 - GitHub repository: add the public repository URL after publishing
 - License: MIT
 
@@ -45,7 +45,7 @@ Preliminary target for the public endpoint:
 - Database: Managed PostgreSQL with auto-suspend; 4 GB instance (PandaStack clone-based resize)
 - Container baseline: 8 vCPU burst, 4 GB RAM
 
-Measured local results (dev_mock mode): 76 tests passed, 24 concurrent synchronous Add calls completed in approximately 0.36 seconds, Search latency approximately 0.081 seconds. Replace this section with the measured production results after running `scripts/ops_contract.py` and `scripts/recovery_check.py`.
+Local tests and the `dev_mock` Add/Search contract pass; see `docs/STATE.md` for the latest local measurements. Replace this section with measured production results after running `scripts/ops_contract.py` and `scripts/recovery_check.py`.
 
 ## Required participant additions
 

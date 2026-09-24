@@ -1,6 +1,6 @@
 # Build Status
 
-Updated: 2026-09-22.
+Updated: 2026-09-24.
 
 ## Public timeline check
 
@@ -62,18 +62,18 @@ The linked competition page states:
 | URL safety | Complete | Release checks reject credentials, loopback, link-local, and private IPv4 endpoints. |
 | Recovery verification | Complete | Restart script verifies committed evidence is searchable again. |
 | Privacy scan | Complete | CI blocks tracked databases, keys, tokens, credentials, and logs. |
-| Formal model verification | Complete | Chat, embedding, and rerank calls verified against live PandaStack deployment. |
-| Public deployment | Complete | PandaStack Apps with Managed PostgreSQL; public HTTPS endpoints verified. |
+| Formal model verification | Prior deployment | Chat and embedding calls were verified on PandaStack before the current code changes; the updated rerank integration still needs remote verification. |
+| Public deployment | Prior deployment | PandaStack Apps with Managed PostgreSQL and public HTTPS endpoints were verified before the current code changes. |
 | Platform Smoke | Not run | Requires an evaluation API key. |
 | Full evaluation | Not run | Requires an accepted deployed endpoint and available quota. |
 | Official score | Not available | No official result exists yet. |
 
 ## What remains
 
-The remaining work is operational rather than architectural:
+The remaining work is deployment and official evaluation:
 
 1. Publish this repository to a public GitHub repository.
-2. Deploy the `1.0.0` image to a public HTTPS host with a persistent volume.
+2. Deploy the updated image to a public HTTPS host with a persistent volume.
 3. Configure `AML_API_KEY`, model credentials, and embedding/rerank endpoints.
 4. Run the contract, smoke, concurrency, and recovery checks against the deployed endpoint.
 5. Submit the live Add/Search URLs and repository commit for review.

@@ -60,6 +60,8 @@ RERANK_API_KEY=<optional separate reranker credential>
 ```
 
 The embedding endpoint reuses `OPENAI_BASE_URL` and `OPENAI_API_KEY` unless you set `OPENAI_EMBEDDING_BASE_URL` and `OPENAI_EMBEDDING_API_KEY`, so chat and embeddings can come from different OpenAI-compatible providers.
+For `RERANK_MODEL=qwen3.7-text-rerank`, set `RERANK_BASE_URL` to the full DashScope endpoint ending in `/api/v1/services/rerank/text-rerank/text-rerank`; the service uses the native request and response format. Set `RERANK_API_KEY` to the credential for that endpoint.
+PandaStack logs include timestamps, model-call start and completion, retries, HTTP status, and safe upstream error identifiers. Request content and upstream error bodies are not written to these logs.
 
 ## Auto Deploy
 

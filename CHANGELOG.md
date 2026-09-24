@@ -1,7 +1,12 @@
 # Changelog
 
-## 1.1.0
+## Unreleased
 
+- Split embedding calls into batches of at most 10 and validate response indexes and dimensions.
+- Use the native `qwen3.7-text-rerank` API and cap each request at 500 rule-ranked candidates.
+- Apply rerank scores to Search evidence order, retry failed reranks, and keep temporal queries on time-aware ranking.
+- Add model-call timestamps and diagnostic logs without writing upstream response bodies into persistent logs.
+- Keep packed evidence IDs tied to a source in the returned window.
 - Rebalanced ranking weights toward temporal signals and added correction-based suppression of superseded memories.
 - Included the rerank configuration in the Search cache key.
 - Added the optional reranker with `RERANK_MODEL`, `RERANK_BASE_URL`, and `RERANK_API_KEY`; rerank failures fall back to rule-based ranking.

@@ -1,6 +1,6 @@
 # Project State
 
-Updated: 2026-09-22.
+Updated: 2026-09-24.
 
 ## Current status
 
@@ -21,6 +21,9 @@ The repository also includes Docker deployment files, a Caddy HTTPS example, Pan
 - Lexical retrieval works without external model credentials in `off` and `dev_mock` modes.
 - Embeddings and optional model calls are explicit configuration, not hidden fallback behavior.
 - Optional reranker with automatic fallback to rule-based ranking.
+- `text-embedding-v4` calls split into batches of at most 10, with response indexes and dimensions checked before persistence.
+- `qwen3.7-text-rerank` uses the native DashScope request and response format, with at most 500 rule-ranked documents per call; successful scores order non-temporal evidence, while earliest/latest queries retain time-aware ordering.
+- Packed evidence IDs correspond to a source contained in the returned window.
 - Deployment and operational checks are included.
 
 ## Verified locally
@@ -31,7 +34,7 @@ Command:
 pytest -q
 ```
 
-Result: 76 tests passed using the existing local Python environment.
+Result: the full local test suite passed using the existing Python environment.
 
 Command:
 
@@ -47,9 +50,9 @@ Command:
 python scripts/local_verify.py --port 8123 --concurrency 24
 ```
 
-Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.36 seconds, 13 returned evidence windows, and a measured Search latency of about 0.081 seconds in `dev_mock` mode.
+Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.35 seconds, 12 returned evidence windows, and measured Search latency of about 0.096 seconds in `dev_mock` mode.
 
-## Verified on PandaStack deployment
+## Verified on the prior PandaStack deployment
 
 Public HTTPS deployment on PandaStack with Managed PostgreSQL has been verified:
 
@@ -62,18 +65,19 @@ Public HTTPS deployment on PandaStack with Managed PostgreSQL has been verified:
 - Invalid credentials return HTTP 401.
 - Search latency with live embedding and rerank is approximately 4-6 seconds.
 
+These checks predate the current code changes. The updated deployment has not been tested remotely.
+
 ## Not yet verified
 
 - Platform-issued Eval Key and public Smoke.
-
-
+- PandaStack deployment and remote verification of the current code changes.
 - Official score.
 
 Do not report planned model use or local tests as an official competition result.
 
 ## Next minimum task
 
-Apply for an evaluation key, then run:
+Deploy the committed code, then apply for an evaluation key and run:
 
 ```bash
 python scripts/ops_contract.py --base-url https://<app-id>.pandastack.ai --api-key "$MEMORY_SYSTEM_KEY"

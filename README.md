@@ -159,7 +159,7 @@ pytest -q
 python scripts/privacy_scan.py --root .
 ```
 
-73 unit and integration tests cover API contract, user isolation, persistence, concurrency, temporal retrieval, and tooling.
+Unit and integration tests cover API contract, user isolation, persistence, concurrency, temporal retrieval, model integration, and tooling.
 
 ## API
 
@@ -258,11 +258,11 @@ The search pipeline processes a query through five stages:
 
 2. **Lexical search**: SQLite FTS5 or PostgreSQL full-text search retrieves candidates using BM25 ranking, Unicode normalization, Porter tokenization, and CJK n-grams.
 
-3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Only vectors from the same embedding model and dimension are considered.
+3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Only vectors from the same embedding model and dimension are considered. Embedding writes are split into batches of at most 10 texts for `text-embedding-v4` compatibility.
 
 4. **Reciprocal rank fusion**: both candidate lists are merged using `1 / (60 + rank)` scoring, then filtered by a minimum similarity threshold.
 
-5. **Window expansion and ranking**: matched candidates expand to include adjacent turns in the same session. A ranking model combines term coverage, option matches, phrase bonuses, and temporal intent to produce the final ordered evidence windows.
+5. **Window expansion and ranking**: matched candidates expand to include adjacent turns in the same session. Rule-based ranking combines term coverage, option matches, phrase bonuses, and temporal intent. For queries without temporal intent, configured reranker scores determine the final evidence order; `qwen3.7-text-rerank` receives at most 500 top rule-ranked candidates per call. Temporary failures fall back to rule-based ranking and are retried on the next Search. Earliest and latest queries retain time-aware rule ranking.
 
 ## Configuration
 
@@ -279,14 +279,19 @@ The search pipeline processes a query through five stages:
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-v4` | Embedding model |
 | `OPENAI_EMBEDDING_BASE_URL` | falls back to `OPENAI_BASE_URL` | Optional separate embedding endpoint |
 | `OPENAI_EMBEDDING_API_KEY` | falls back to `OPENAI_API_KEY` | Optional separate embedding credential |
+| `RERANK_MODEL` | empty | Optional reranker model; empty disables reranking |
+| `RERANK_BASE_URL` | falls back to the embedding base URL | Reranker endpoint or base URL |
+| `RERANK_API_KEY` | falls back to the embedding API key | Optional separate reranker credential |
 | `AML_TIMEOUT_SECONDS` | `90` | Upstream timeout |
-| `AML_CANDIDATE_LIMIT` | `300` | Candidate cap before ranking |
+| `AML_CANDIDATE_LIMIT` | `300` | Candidate cap per retrieval channel before fusion |
 | `AML_MAX_OUTPUT_TOKENS` | `8000` | Evidence token budget |
 | `AML_MAX_OUTPUT_ITEMS` | `24` | Maximum returned evidence windows |
 | `AML_VECTOR_MIN_SIMILARITY` | `0.35` | Minimum vector similarity for vector-only candidates |
 | `AML_VECTOR_ONLY_MIN_SIMILARITY` | `0.65` | Stricter threshold when lexical retrieval has no candidates |
 | `AML_SEARCH_CONCURRENCY` | `32` | Maximum in-process Search operations |
 | `AML_ADD_CONCURRENCY` | `16` | Maximum in-process Add operations |
+
+For `qwen3.7-text-rerank`, `RERANK_BASE_URL` may be the full DashScope endpoint ending in `/api/v1/services/rerank/text-rerank/text-rerank`. The service uses that native API's nested `input` request and `output.results` response format.
 
 ## Deployment
 
@@ -330,7 +335,7 @@ python scripts/release_check.py \
 pytest -q
 ```
 
-73 unit and integration tests cover:
+Unit and integration tests cover:
 
 - API contract and response schema validation
 - Strict user isolation and cross-user access denial
@@ -361,7 +366,7 @@ agentkiln-memory/
 │   ├── ops_contract.py  # Public contract check
 │   ├── recovery_check.py # Container restart recovery check
 │   └── release_check.py # Submission readiness check
-├── tests/               # 73 unit and integration tests
+├── tests/               # Unit and integration tests
 ├── deploy/              # Production deployment guides
 ├── docs/                # Project state and submission materials
 ├── .github/workflows/   # CI and deployment automation
