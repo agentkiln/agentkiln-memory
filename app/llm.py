@@ -21,6 +21,12 @@ class LLMUnavailable(RuntimeError):
 
 logger = logging.getLogger("uvicorn.error")
 EMBEDDING_BATCH_SIZE = 10
+EMBEDDING_CHUNK_MAX_BYTES = 4096
+EMBEDDING_BEIJING_BATCH_MAX_BYTES = 32000
+EMBEDDING_OTHER_BATCH_MAX_BYTES = 8000
+ANNOTATION_FRAGMENT_MAX_BYTES = 2048
+ANNOTATION_BATCH_MAX_BYTES = 32 * 1024
+ANNOTATION_BATCH_MAX_ITEMS = 16
 
 
 @dataclass(frozen=True)
@@ -101,9 +107,52 @@ class MemoryLLM:
             return [self._mock_embedding(text) for text in texts]
         if not self.settings.embedding_api_key:
             raise LLMUnavailable("OPENAI_EMBEDDING_API_KEY is required in competition mode")
-        vectors: list[list[float]] = []
-        for offset in range(0, len(texts), EMBEDDING_BATCH_SIZE):
-            batch = texts[offset : offset + EMBEDDING_BATCH_SIZE]
+        def input_items():
+            for owner, original in enumerate(texts):
+                chunks = (
+                    self._embedding_chunks(original)
+                    if self.settings.embedding_model == "text-embedding-v4"
+                    else (original,)
+                )
+                for chunk in chunks:
+                    yield owner, chunk
+
+        if self.settings.embedding_model == "text-embedding-v4":
+            host = urlparse(self.settings.embedding_base_url).hostname or ""
+            max_batch_bytes = (
+                EMBEDDING_BEIJING_BATCH_MAX_BYTES
+                if host == "dashscope.aliyuncs.com"
+                or host.endswith(".cn-beijing.maas.aliyuncs.com")
+                else EMBEDDING_OTHER_BATCH_MAX_BYTES
+            )
+        else:
+            max_batch_bytes = None
+
+        def batches():
+            batch: list[tuple[int, str]] = []
+            batch_bytes = 0
+            for owner, chunk in input_items():
+                size = len(chunk.encode("utf-8"))
+                if batch and max_batch_bytes is not None and batch_bytes + size > max_batch_bytes:
+                    yield batch
+                    batch = []
+                    batch_bytes = 0
+                batch.append((owner, chunk))
+                batch_bytes += size
+                if len(batch) == EMBEDDING_BATCH_SIZE:
+                    yield batch
+                    batch = []
+                    batch_bytes = 0
+            if batch:
+                yield batch
+
+        first_vectors: list[list[float] | None] = [None] * len(texts)
+        weighted_sums: list[list[float] | None] = [None] * len(texts)
+        byte_totals = [0] * len(texts)
+        chunk_counts = [0] * len(texts)
+        dimension: int | None = None
+        for batch_items in batches():
+            batch = [chunk for _owner, chunk in batch_items]
             body = self._post(
                 "/embeddings",
                 {"model": self.settings.embedding_model, "input": batch},
@@ -119,35 +168,74 @@ class MemoryLLM:
             ):
                 raise LLMUnavailable("embedding response index mismatch")
             rows = sorted(data, key=lambda row: row["index"])
-            batch_vectors: list[list[float]] = []
-            for row in rows:
+            for (owner, chunk), row in zip(batch_items, rows):
                 embedding = row.get("embedding")
                 if not isinstance(embedding, list) or not embedding or any(
                     type(value) not in {int, float} or not math.isfinite(value)
                     for value in embedding
                 ):
                     raise LLMUnavailable("embedding response contains invalid vector")
-                batch_vectors.append([float(value) for value in embedding])
-            vectors.extend(batch_vectors)
-        dimensions = {len(vector) for vector in vectors}
-        if len(dimensions) > 1 or (vectors and len(vectors[0]) == 0):
-            raise LLMUnavailable("embedding dimensions are inconsistent")
-        return vectors
+                vector = [float(value) for value in embedding]
+                if dimension is None:
+                    dimension = len(vector)
+                elif len(vector) != dimension:
+                    raise LLMUnavailable("embedding dimensions are inconsistent")
+                if first_vectors[owner] is None:
+                    first_vectors[owner] = vector
+                    weighted_sums[owner] = [0.0] * len(vector)
+                weight = len(chunk.encode("utf-8"))
+                sums = weighted_sums[owner]
+                if sums is not None:
+                    for axis, value in enumerate(vector):
+                        sums[axis] += value * weight
+                byte_totals[owner] += weight
+                chunk_counts[owner] += 1
+        output: list[list[float]] = []
+        for first, sums, total, count in zip(
+            first_vectors, weighted_sums, byte_totals, chunk_counts
+        ):
+            if first is None:
+                raise LLMUnavailable("embedding response count mismatch")
+            if count == 1:
+                output.append(first)
+            elif sums is not None and total:
+                output.append([value / total for value in sums])
+            else:
+                raise LLMUnavailable("embedding response contains invalid vector")
+        return output
+
+    @staticmethod
+    def _embedding_chunks(text: str):
+        if len(text) <= EMBEDDING_CHUNK_MAX_BYTES and len(text.encode("utf-8")) <= EMBEDDING_CHUNK_MAX_BYTES:
+            yield text
+            return
+        current: list[str] = []
+        current_bytes = 0
+        for character in text:
+            size = len(character.encode("utf-8"))
+            if current_bytes + size > EMBEDDING_CHUNK_MAX_BYTES:
+                yield "".join(current)
+                current = []
+                current_bytes = 0
+            current.append(character)
+            current_bytes += size
+        if current:
+            yield "".join(current)
 
     def annotate_messages(self, messages: list[MemoryMessage]) -> list[str]:
         self._require_competition_key()
         if self.settings.llm_mode != "competition" or not self.settings.openai_api_key:
             return ["" for _message in messages]
-        transcript = [
-            {"index": index, "role": message.role, "content": message.content}
-            for index, message in enumerate(messages)
-        ]
-        body = self._post(
-            "/chat/completions",
-            {
+
+        def payload_for(batch: list[tuple[int, str, str]]) -> dict:
+            transcript = [
+                {"index": index, "role": role, "content": content}
+                for index, (_source_index, role, content) in enumerate(batch)
+            ]
+            return {
                 "model": self.settings.openai_model,
                 "temperature": 0,
-                "max_tokens": min(1024, max(128, len(messages) * 48)),
+                "max_tokens": min(2048, max(256, len(batch) * 96)),
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
@@ -160,17 +248,57 @@ class MemoryLLM:
                     },
                     {"role": "user", "content": json.dumps({"messages": transcript}, ensure_ascii=False)},
                 ],
-            },
-        )
-        output = ["" for _message in messages]
-        parsed = self._json_content(body)
-        for item in parsed.get("items", []) if isinstance(parsed, dict) else []:
-            if not isinstance(item, dict) or not isinstance(item.get("index"), int):
-                continue
-            index = item["index"]
-            if 0 <= index < len(output) and isinstance(item.get("terms"), list):
-                output[index] = " ".join(str(term) for term in item["terms"])
-        return output
+            }
+
+        terms_by_message: list[list[str]] = [[] for _message in messages]
+
+        def send(batch: list[tuple[int, str, str]]) -> None:
+            body = self._post("/chat/completions", payload_for(batch))
+            parsed = self._json_content(body)
+            items = parsed.get("items") if isinstance(parsed, dict) else None
+            for item in items if isinstance(items, list) else []:
+                if not isinstance(item, dict) or type(item.get("index")) is not int:
+                    continue
+                local_index = item["index"]
+                if 0 <= local_index < len(batch) and isinstance(item.get("terms"), list):
+                    source_index = batch[local_index][0]
+                    terms_by_message[source_index].extend(str(term) for term in item["terms"])
+
+        batch: list[tuple[int, str, str]] = []
+        for source_index, message in enumerate(messages):
+            for fragment in self._annotation_fragments(message.content):
+                entry = (source_index, message.role, fragment)
+                candidate = [*batch, entry]
+                if batch and (
+                    len(candidate) > ANNOTATION_BATCH_MAX_ITEMS
+                    or len(json.dumps(payload_for(candidate)).encode("utf-8")) > ANNOTATION_BATCH_MAX_BYTES
+                ):
+                    send(batch)
+                    batch = []
+                batch.append(entry)
+                if len(json.dumps(payload_for(batch)).encode("utf-8")) > ANNOTATION_BATCH_MAX_BYTES:
+                    raise LLMUnavailable("annotation request exceeds size limit")
+        if batch:
+            send(batch)
+        return [" ".join(dict.fromkeys(terms)) for terms in terms_by_message]
+
+    @staticmethod
+    def _annotation_fragments(text: str):
+        if len(text) <= ANNOTATION_FRAGMENT_MAX_BYTES and len(text.encode("utf-8")) <= ANNOTATION_FRAGMENT_MAX_BYTES:
+            yield text
+            return
+        current: list[str] = []
+        current_bytes = 0
+        for character in text:
+            size = len(character.encode("utf-8"))
+            if current_bytes + size > ANNOTATION_FRAGMENT_MAX_BYTES:
+                yield "".join(current)
+                current = []
+                current_bytes = 0
+            current.append(character)
+            current_bytes += size
+        if current:
+            yield "".join(current)
 
     def analyze_query(self, query: str, options: list[str] | None) -> QueryPlan:
         self._require_competition_key()
@@ -197,7 +325,7 @@ class MemoryLLM:
         )
         parsed = self._json_content(body)
         intent = parsed.get("temporal_intent", "none") if isinstance(parsed, dict) else "none"
-        if intent not in {"none", "latest", "earliest"}:
+        if not isinstance(intent, str) or intent not in {"none", "latest", "earliest"}:
             intent = "none"
         return QueryPlan(
             terms=self._string_list(parsed.get("terms", []) if isinstance(parsed, dict) else [], 48),

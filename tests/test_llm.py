@@ -1,4 +1,5 @@
 import io
+import json
 from dataclasses import replace
 from pathlib import Path
 import urllib.error
@@ -9,6 +10,7 @@ import pytest
 
 from app.config import Settings
 from app.llm import LLMUnavailable, MemoryLLM
+from app.schemas import MemoryMessage
 
 
 def settings(tmp_path: Path) -> Settings:
@@ -128,6 +130,77 @@ def test_dev_mock_mode_never_calls_rerank_provider(tmp_path: Path) -> None:
 
     with patch.object(llm, "_post", side_effect=AssertionError("external call")):
         assert llm.rerank("tea", ["jasmine tea"]) is None
+
+
+def test_annotation_ignores_non_list_items_from_model(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    response = {"choices": [{"message": {"content": json.dumps({"items": None})}}]}
+
+    with patch.object(llm, "_post", return_value=response):
+        assert llm.annotate_messages([MemoryMessage(role="user", content="hello")]) == [""]
+
+
+def test_annotation_batches_200_messages_and_maps_local_indices(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    messages = [MemoryMessage(role="user", content=f"marker-{index:03d}") for index in range(200)]
+    calls: list[dict] = []
+
+    def fake_post(path: str, payload: dict) -> dict:
+        assert path == "/chat/completions"
+        calls.append(payload)
+        assert len(json.dumps(payload).encode("utf-8")) <= 32 * 1024
+        batch = json.loads(payload["messages"][1]["content"])["messages"]
+        assert len(batch) <= 16
+        assert [item["index"] for item in batch] == list(range(len(batch)))
+        items = [
+            {"index": item["index"], "terms": [f"term-{item['content'].split('-')[1]}"]}
+            for item in reversed(batch)
+        ]
+        return {"choices": [{"message": {"content": json.dumps({"items": items})}}]}
+
+    with patch.object(llm, "_post", side_effect=fake_post):
+        result = llm.annotate_messages(messages)
+
+    assert len(calls) > 1
+    assert sum(call["max_tokens"] for call in calls) > 1024
+    assert result == [f"term-{index:03d}" for index in range(200)]
+
+
+def test_annotation_splits_long_multibyte_message_and_merges_terms(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    content = "start-tag:" + "界" * 10_000 + ":end-tag"
+    fragments: list[str] = []
+    expected_terms: list[str] = []
+
+    def fake_post(path: str, payload: dict) -> dict:
+        assert path == "/chat/completions"
+        assert len(json.dumps(payload).encode("utf-8")) <= 32 * 1024
+        batch = json.loads(payload["messages"][1]["content"])["messages"]
+        items = []
+        for item in batch:
+            assert item["index"] in range(len(batch))
+            fragments.append(item["content"])
+            term = f"fragment-{len(fragments)}"
+            expected_terms.append(term)
+            items.append({"index": item["index"], "terms": ["shared", term]})
+        return {"choices": [{"message": {"content": json.dumps({"items": items})}}]}
+
+    with patch.object(llm, "_post", side_effect=fake_post):
+        result = llm.annotate_messages([MemoryMessage(role="user", content=content)])
+
+    assert len(fragments) > 1
+    assert "".join(fragments) == content
+    assert result == [" ".join(["shared", *expected_terms])]
+
+
+def test_query_analysis_ignores_non_string_temporal_intent(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    response = {
+        "choices": [{"message": {"content": json.dumps({"temporal_intent": []})}}]
+    }
+
+    with patch.object(llm, "_post", return_value=response):
+        assert llm.analyze_query("hello", None).intent == "none"
 
 
 def test_post_logs_request_lifecycle_without_payload_content(tmp_path: Path) -> None:
@@ -252,6 +325,127 @@ def test_embedding_requests_are_batched_at_ten_and_preserve_order(tmp_path: Path
 
     assert batch_sizes == [10, 10, 3]
     assert vectors == [[float(index), 1.0] for index in range(23)]
+
+
+@pytest.mark.parametrize(
+    ("base_url", "max_bytes", "expected_sizes"),
+    [
+        ("https://embedding.example.com/v1", 8000, [2, 2, 2, 2, 2]),
+        ("https://dashscope.aliyuncs.com/compatible-mode/v1", 32000, [8, 2]),
+    ],
+)
+def test_embedding_batches_respect_total_byte_budget(
+    tmp_path: Path, base_url: str, max_bytes: int, expected_sizes: list[int]
+) -> None:
+    llm = MemoryLLM(replace(settings(tmp_path), embedding_base_url=base_url))
+    texts = [str(index) + "x" * 3899 for index in range(10)]
+    batches: list[list[str]] = []
+
+    def fake_post(path: str, payload: dict, **kwargs) -> dict:
+        batch = payload["input"]
+        batches.append(batch)
+        return {
+            "data": [
+                {"index": index, "embedding": [float(text[0]), 1.0]}
+                for index, text in enumerate(batch)
+            ]
+        }
+
+    with patch.object(llm, "_post", side_effect=fake_post):
+        vectors = llm.embed_texts(texts)
+
+    assert [len(batch) for batch in batches] == expected_sizes
+    assert all(sum(len(text.encode("utf-8")) for text in batch) <= max_bytes for batch in batches)
+    assert vectors == [[float(index), 1.0] for index in range(10)]
+
+
+def test_long_embedding_preserves_text_and_returns_one_combined_vector(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    long_text = "a" * 8190 + "🫖" + "tail"
+    inputs: list[str] = []
+
+    def fake_post(path: str, payload: dict, **kwargs) -> dict:
+        assert path == "/embeddings"
+        batch = payload["input"]
+        assert all(len(chunk.encode("utf-8")) <= 4096 for chunk in batch)
+        inputs.extend(batch)
+        return {
+            "data": [
+                {
+                    "index": index,
+                    "embedding": [0.0, 1.0] if "🫖" in chunk else [1.0, 0.0],
+                }
+                for index, chunk in enumerate(batch)
+            ]
+        }
+
+    with patch.object(llm, "_post", side_effect=fake_post):
+        vectors = llm.embed_texts(["short", long_text, "last"])
+
+    assert len(vectors) == 3
+    assert vectors[0] == [1.0, 0.0]
+    assert vectors[2] == [1.0, 0.0]
+    long_chunks = inputs[1:-1]
+    assert len(long_chunks) > 1
+    assert "".join(long_chunks) == long_text
+    total_bytes = sum(len(chunk.encode("utf-8")) for chunk in long_chunks)
+    emoji_bytes = sum(len(chunk.encode("utf-8")) for chunk in long_chunks if "🫖" in chunk)
+    assert vectors[1] == pytest.approx([1 - emoji_bytes / total_bytes, emoji_bytes / total_bytes])
+
+
+def test_long_embedding_chunks_still_use_bounded_batches(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    long_text = "甲" * 30_000
+    batches: list[list[str]] = []
+
+    def fake_post(path: str, payload: dict, **kwargs) -> dict:
+        batch = payload["input"]
+        batches.append(batch)
+        return {
+            "data": [
+                {"index": index, "embedding": [1.0, 0.0]}
+                for index, _chunk in enumerate(batch)
+            ]
+        }
+
+    with patch.object(llm, "_post", side_effect=fake_post):
+        assert llm.embed_texts([long_text]) == [[1.0, 0.0]]
+
+    assert len(batches) >= 2
+    assert all(1 <= len(batch) <= 10 for batch in batches)
+    assert "".join(chunk for batch in batches for chunk in batch) == long_text
+    assert all(len(chunk.encode("utf-8")) <= 4096 for batch in batches for chunk in batch)
+
+
+def test_long_embedding_streams_batches_before_generating_all_chunks(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    produced = 0
+    requests = 0
+
+    def chunks(_text: str):
+        nonlocal produced
+        for index in range(23):
+            produced += 1
+            if produced > 10 and requests == 0:
+                raise AssertionError("all chunks generated before first request")
+            yield f"part-{index}"
+
+    def fake_post(path: str, payload: dict, **kwargs) -> dict:
+        nonlocal requests
+        requests += 1
+        return {
+            "data": [
+                {"index": index, "embedding": [1.0, 0.0]}
+                for index, _chunk in enumerate(payload["input"])
+            ]
+        }
+
+    with patch.object(llm, "_embedding_chunks", side_effect=chunks):
+        with patch.object(llm, "_post", side_effect=fake_post):
+            assert llm.embed_texts(["long text"]) == [[1.0, 0.0]]
+
+    assert produced == 23
+    assert requests == 3
 
 
 def test_embedding_rejects_invalid_index_in_later_batch(tmp_path: Path) -> None:
