@@ -3,9 +3,28 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 PRODUCTION_ENV_VALUES = {"1", "true", "yes", "on"}
+
+
+def _require_https_endpoint(name: str, value: str) -> None:
+    try:
+        parsed = urlparse(value)
+        valid = (
+            parsed.scheme == "https"
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+        )
+        _port = parsed.port
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError(f"AML_PRODUCTION requires an HTTPS {name}")
 
 
 @dataclass(frozen=True)
@@ -49,8 +68,6 @@ class Settings:
         if production and not (os.getenv("OPENAI_API_KEY") or "").strip():
             raise ValueError("AML_PRODUCTION requires OPENAI_API_KEY")
         base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        if production and not base_url.startswith("https://"):
-            raise ValueError("AML_PRODUCTION requires an HTTPS OPENAI_BASE_URL")
         openai_api_key = (os.getenv("OPENAI_API_KEY") or "").strip() or None
         embedding_api_key = (
             os.getenv("OPENAI_EMBEDDING_API_KEY") or openai_api_key or ""
@@ -65,6 +82,13 @@ class Settings:
         rerank_base_url = (
             os.getenv("RERANK_BASE_URL") or embedding_base_url
         ).strip().rstrip("/")
+        if production:
+            for name, value in (
+                ("OPENAI_BASE_URL", base_url),
+                ("OPENAI_EMBEDDING_BASE_URL", embedding_base_url),
+                ("RERANK_BASE_URL", rerank_base_url),
+            ):
+                _require_https_endpoint(name, value)
         return cls(
             database_path=Path(os.getenv("AML_DATABASE_PATH", "data/memory.db")),
             api_key=production_api_key or None,

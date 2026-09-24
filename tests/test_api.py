@@ -1,5 +1,7 @@
+import io
 from dataclasses import replace
 from pathlib import Path
+import urllib.error
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -258,6 +260,65 @@ def test_rerank_failure_is_retried_on_next_search(tmp_path: Path) -> None:
         assert client.post("/search", json=query).status_code == 200
 
     assert rerank.call_count == 2
+
+
+def test_add_malformed_embedding_is_service_unavailable(tmp_path: Path) -> None:
+    configured = replace(
+        settings(tmp_path),
+        llm_mode="competition",
+        openai_api_key="test-key",
+        embedding_api_key="test-key",
+    )
+    client = TestClient(create_app(configured))
+    payload = {
+        "request_id": "malformed-vector",
+        "messages": [{"role": "user", "content": "Remember the launch code."}],
+        "user_id": "vector-user",
+        "session_id": "vector-session",
+    }
+
+    with (
+        patch("app.service.MemoryLLM.annotate_messages", return_value=[""]),
+        patch(
+            "app.service.MemoryLLM._post",
+            return_value={"data": [{"index": 0, "embedding": [1.0, float("nan")]}]},
+        ),
+    ):
+        response = client.post("/add", json=payload)
+
+    assert response.status_code == 503
+
+
+def test_add_does_not_reflect_upstream_error_body(tmp_path: Path) -> None:
+    configured = replace(
+        settings(tmp_path),
+        llm_mode="competition",
+        openai_api_key="test-key",
+        embedding_api_key="test-key",
+    )
+    client = TestClient(create_app(configured))
+    error = urllib.error.HTTPError(
+        url="https://provider.example/v1/chat/completions",
+        code=422,
+        msg="Unprocessable Entity",
+        hdrs={},
+        fp=io.BytesIO(b'{"error":{"code":"InvalidParameter","message":"secret memory"}}'),
+    )
+
+    with patch("app.llm.urllib.request.urlopen", side_effect=error):
+        response = client.post(
+            "/add",
+            json={
+                "request_id": "upstream-error",
+                "messages": [{"role": "user", "content": "secret memory"}],
+                "user_id": "private-user",
+                "session_id": "private-session",
+            },
+        )
+
+    assert response.status_code == 503
+    assert "InvalidParameter" in response.text
+    assert "secret memory" not in response.text
 
 
 def test_authentication_and_restart_persistence(tmp_path: Path) -> None:

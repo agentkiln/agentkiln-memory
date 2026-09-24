@@ -2,6 +2,7 @@ import io
 from dataclasses import replace
 from pathlib import Path
 import urllib.error
+import urllib.request
 from unittest.mock import patch
 
 import pytest
@@ -274,14 +275,41 @@ def test_embedding_rejects_invalid_index_in_later_batch(tmp_path: Path) -> None:
             llm.embed_texts([f"text-{index}" for index in range(11)])
 
 
-def test_http_error_includes_upstream_body(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "embedding",
+    [None, "not-a-vector", [1.0, "bad"], [1.0, float("nan")], [True, 0.0]],
+)
+def test_embedding_rejects_malformed_vectors(tmp_path: Path, embedding: object) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+
+    with patch.object(
+        llm,
+        "_post",
+        return_value={"data": [{"index": 0, "embedding": embedding}]},
+    ):
+        with pytest.raises(LLMUnavailable, match="invalid vector"):
+            llm.embed_texts(["remember this"])
+
+
+def test_competition_requires_embedding_credential(tmp_path: Path) -> None:
+    llm = MemoryLLM(replace(settings(tmp_path), embedding_api_key=None))
+
+    assert llm.ready is False
+    with pytest.raises(LLMUnavailable, match="OPENAI_EMBEDDING_API_KEY"):
+        llm.embed_texts(["remember this"])
+
+
+def test_http_error_exposes_only_safe_identifiers(tmp_path: Path) -> None:
     llm = MemoryLLM(settings(tmp_path))
     error = urllib.error.HTTPError(
         url="https://example.test",
         code=422,
         msg="Unprocessable Entity",
         hdrs={},
-        fp=io.BytesIO(b'{"error":"response_format is not supported"}'),
+        fp=io.BytesIO(
+            b'{"error":{"code":"InvalidParameter","message":"secret memory leaked"},'
+            b'"request_id":"11223344-5566-7788-99aa-bbccddeeff00"}'
+        ),
     )
     with patch("app.llm.urllib.request.urlopen", side_effect=error):
         try:
@@ -291,4 +319,25 @@ def test_http_error_includes_upstream_body(tmp_path: Path) -> None:
         else:
             raise AssertionError("expected failure")
     assert "422" in message
-    assert "response_format is not supported" in message
+    assert "InvalidParameter" in message
+    assert "11223344-5566-7788-99aa-bbccddeeff00" in message
+    assert "secret memory" not in message
+
+
+def test_model_redirect_does_not_forward_authorization(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    captured = []
+
+    def fake_urlopen(request, timeout):
+        captured.append(request)
+        return io.BytesIO(b"{}")
+
+    with patch("app.llm.urllib.request.urlopen", side_effect=fake_urlopen):
+        llm._post("/embeddings", {"model": "text-embedding-v4", "input": ["secret memory"]})
+
+    assert captured[0].get_header("Authorization") == "Bearer secret"
+    redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+        captured[0], None, 302, "Found", {}, "http://other.example/collect"
+    )
+    assert redirected is not None
+    assert redirected.get_header("Authorization") is None

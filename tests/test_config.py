@@ -1,4 +1,8 @@
+import os
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from app.config import Settings
 
@@ -45,3 +49,29 @@ def test_embedding_can_use_separate_endpoint(monkeypatch, tmp_path: Path) -> Non
     settings = Settings.from_env()
     assert settings.embedding_api_key == "embed-key"
     assert settings.embedding_base_url == "https://embed.example.com/v1"
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("OPENAI_BASE_URL", "https://"),
+        ("OPENAI_EMBEDDING_BASE_URL", "http://embed.example.com/v1"),
+        ("RERANK_BASE_URL", "http://rerank.example.com/native"),
+    ],
+)
+def test_production_rejects_insecure_model_endpoints(key: str, value: str) -> None:
+    env = {
+        "AML_PRODUCTION": "1",
+        "AML_LLM_MODE": "competition",
+        "AML_API_KEY": "long-local-test-api-key",
+        "OPENAI_API_KEY": "chat-key",
+        "OPENAI_BASE_URL": "https://chat.example.com/v1",
+        "OPENAI_EMBEDDING_BASE_URL": "https://embed.example.com/v1",
+        "RERANK_MODEL": "qwen3.7-text-rerank",
+        "RERANK_BASE_URL": "https://rerank.example.com/native",
+    }
+    env[key] = value
+
+    with patch.dict(os.environ, env, clear=True):
+        with pytest.raises(ValueError, match=key):
+            Settings.from_env()

@@ -36,7 +36,9 @@ class MemoryLLM:
 
     @property
     def ready(self) -> bool:
-        return self.settings.llm_mode in {"off", "dev_mock"} or bool(self.settings.openai_api_key)
+        return self.settings.llm_mode in {"off", "dev_mock"} or bool(
+            self.settings.openai_api_key and self.settings.embedding_api_key
+        )
 
     def _require_competition_key(self) -> None:
         if self.settings.llm_mode == "competition" and not self.settings.openai_api_key:
@@ -95,8 +97,10 @@ class MemoryLLM:
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         self._require_competition_key()
-        if self.settings.llm_mode != "competition" or not self.settings.embedding_api_key:
+        if self.settings.llm_mode != "competition":
             return [self._mock_embedding(text) for text in texts]
+        if not self.settings.embedding_api_key:
+            raise LLMUnavailable("OPENAI_EMBEDDING_API_KEY is required in competition mode")
         vectors: list[list[float]] = []
         for offset in range(0, len(texts), EMBEDDING_BATCH_SIZE):
             batch = texts[offset : offset + EMBEDDING_BATCH_SIZE]
@@ -115,7 +119,15 @@ class MemoryLLM:
             ):
                 raise LLMUnavailable("embedding response index mismatch")
             rows = sorted(data, key=lambda row: row["index"])
-            batch_vectors = [[float(value) for value in row["embedding"]] for row in rows]
+            batch_vectors: list[list[float]] = []
+            for row in rows:
+                embedding = row.get("embedding")
+                if not isinstance(embedding, list) or not embedding or any(
+                    type(value) not in {int, float} or not math.isfinite(value)
+                    for value in embedding
+                ):
+                    raise LLMUnavailable("embedding response contains invalid vector")
+                batch_vectors.append([float(value) for value in embedding])
             vectors.extend(batch_vectors)
         dimensions = {len(vector) for vector in vectors}
         if len(dimensions) > 1 or (vectors and len(vectors[0]) == 0):
@@ -221,12 +233,10 @@ class MemoryLLM:
             request = urllib.request.Request(
                 f"{resolved_base_url}{path}",
                 data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {resolved_api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers={"Content-Type": "application/json"},
                 method="POST",
             )
+            request.add_unredirected_header("Authorization", f"Bearer {resolved_api_key}")
             try:
                 with urllib.request.urlopen(request, timeout=self.settings.timeout_seconds) as response:
                     decoded = self._decode_response(response.read())
@@ -261,7 +271,8 @@ class MemoryLLM:
                         request_id,
                     )
                     raise LLMUnavailable(
-                        f"model request failed: HTTP {exc.code} {body}"
+                        f"model request failed: HTTP {exc.code} "
+                        f"code={error_code} request_id={request_id}"
                     ) from exc
                 delay = self._retry_delay(exc, attempt)
                 logger.warning(
@@ -291,7 +302,9 @@ class MemoryLLM:
                         (time.perf_counter() - started) * 1000,
                         type(exc).__name__,
                     )
-                    raise LLMUnavailable(f"model request failed: {exc}") from exc
+                    raise LLMUnavailable(
+                        f"model request failed: {type(exc).__name__}"
+                    ) from exc
                 delay = 0.2 * (2**attempt)
                 logger.warning(
                     "llm call retry endpoint=%s path=%s model=%s attempt=%d/%d "
@@ -306,14 +319,14 @@ class MemoryLLM:
                 )
             time.sleep(delay)
         logger.error(
-            "llm call failed endpoint=%s path=%s model=%s attempts=%d error=%s",
+            "llm call failed endpoint=%s path=%s model=%s attempts=%d error_type=%s",
             endpoint,
             path,
             model,
             attempts,
-            last_error,
+            type(last_error).__name__,
         )
-        raise LLMUnavailable(f"model request failed: {last_error}")
+        raise LLMUnavailable(f"model request failed: {type(last_error).__name__}")
 
     @staticmethod
     def _retry_delay(exc: urllib.error.HTTPError, attempt: int) -> float:
