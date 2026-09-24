@@ -183,7 +183,7 @@ python scripts/privacy_scan.py --root .
 ```
 
 - `request_id`：用于去重和重试安全的唯一标识
-- `messages`：1 到 200 条消息，每条包含 `role`、`content` 和可选 `timestamp`
+- `messages`：1 到 200 条消息，每条包含 `role`、`content` 和可选的 Unix 毫秒时间戳 `timestamp`（年份范围 1-9999）
 - `user_id`：严格隔离边界
 - `session_id`：会话分组，用于邻接窗口扩展
 
@@ -248,7 +248,7 @@ python scripts/privacy_scan.py --root .
 
 1. **查询分析**：LLM 调用从查询中提取检索线索、切面和时间意图。`off` 或 `dev_mock` 模式下，仅使用词法特征驱动检索。
 
-2. **词法搜索**：SQLite FTS5 或 PostgreSQL 全文搜索，使用 BM25 排序、Unicode 规范化、Porter 分词和 CJK n-gram。
+2. **词法搜索**：SQLite FTS5 或 PostgreSQL 全文搜索，使用 BM25 排序、Unicode 规范化、Porter 分词和包含单字的中文词条。SQLite 对旧索引写入的记录按用户范围补查单字内容。
 
 3. **向量搜索**：查询嵌入后与存储向量比较余弦相似度，只考虑相同嵌入模型和相同维度的向量。写入时每次最多发送 10 条文本，符合 `text-embedding-v4` 的批量限制。
 
@@ -262,7 +262,7 @@ python scripts/privacy_scan.py --root .
 |------|--------|------|
 | `AML_DATABASE_PATH` | `data/memory.db` | SQLite 数据库路径 |
 | `DATABASE_URL` | 空 | PostgreSQL 连接 URL；设置后使用 PostgreSQL 后端 |
-| `AML_PRODUCTION` | 空 | 设为 `1` 启用比赛模式和 API key 认证 |
+| `AML_PRODUCTION` | 空 | 设为 `1` 后要求比赛模式、API key 认证、HTTPS 模型接口和 PostgreSQL `DATABASE_URL` |
 | `AML_LLM_MODE` | `off` | `off`、`dev_mock` 或 `competition` |
 | `AML_API_KEY` | 空 | 可选的 Add/Search 认证密钥 |
 | `OPENAI_API_KEY` | 空 | 运行时模型凭据 |
@@ -383,6 +383,9 @@ agentkiln-memory/
 - 不要提交 `.env`、API key 或系统凭据
 - Health 公开；Add 和 Search 可配置 Bearer、Token 或 `X-Api-Key` 认证
 - 服务不记录请求体或凭据
+- 生产模式要求聊天、嵌入和重排序接口都使用 HTTPS；模型凭据不会随重定向转发
+- 生产模式要求配置 PostgreSQL `DATABASE_URL`，缺失时服务会在启动阶段报错
+- Add/Search 错误响应不会透传上游错误正文
 - 所有记忆只通过精确提交的 `user_id` 检索
 - 运行结束后 30 天内删除评测数据库或 Docker volume，除非主办方书面允许其他保留期限
 

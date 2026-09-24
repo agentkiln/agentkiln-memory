@@ -83,16 +83,16 @@ The SQLite backend uses WAL journaling, a 60-second busy timeout, and FTS5 with 
 
 ### 4.1 Add path
 
-1. Validate request fields, message count (1-200), and identifier lengths (max 512 characters).
+1. Validate request fields, message count (1-200), identifier lengths (max 512 characters), and Unix-millisecond timestamps within years 1-9999.
 2. Check `request_id` status: new, existing (skip model calls), or conflict (HTTP 409).
 3. Annotate messages with an LLM call that extracts retrieval cues from the transcript.
-4. Embed message contents through the configured embedding provider in batches of at most 10, then check each batch's indexes and the combined vector dimensions.
+4. Embed message contents through the configured embedding provider in batches of at most 10, then check each batch's indexes, vector finiteness, and the combined dimensions.
 5. Persist messages, annotations, vectors, and FTS index entries in a single transaction. A failed write leaves no partial rows searchable.
 
 ### 4.2 Search path
 
 1. **Query analysis**: an LLM call extracts retrieval cues, facets, and temporal intent. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
-2. **Lexical search**: FTS5 or PostgreSQL full-text search retrieves up to `AML_CANDIDATE_LIMIT` candidates using BM25 ranking.
+2. **Lexical search**: FTS5 or PostgreSQL full-text search retrieves up to `AML_CANDIDATE_LIMIT` candidates using BM25 ranking. Single-character CJK queries remain searchable; SQLite also checks older source text within the same user when its previous index lacks the character.
 3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Vectors are filtered by exact user, embedding model, and dimension.
 4. **Fusion**: candidates from both channels are merged with `1 / (60 + rank)` scoring. A lexical-overlap filter suppresses vector-only candidates that share no meaningful terms with the query.
 5. **Window expansion**: matched candidates expand to adjacent turns in the same session using source-order keys.
@@ -111,15 +111,15 @@ Every memory, FTS index entry, vector, cache key, and neighbor query is scoped t
 
 ### 5.2 Idempotent Add
 
-The same `request_id` with the same payload is safe to retry. The system detects duplicate requests by payload hash and returns the original response without calling model endpoints. A different payload with the same `request_id` returns HTTP 409.
+The same `request_id` with the same payload is safe to retry. The system detects duplicate requests by payload hash and returns the original response without calling model endpoints. A different payload with the same `request_id` returns HTTP 409. Memory IDs hash an unambiguous tuple of user, request, and message position.
 
 ### 5.3 Fail-closed production
 
-Production mode requires `AML_LLM_MODE=competition`, a strong `AML_API_KEY` (minimum 16 characters), an `OPENAI_API_KEY`, and an HTTPS model endpoint. Missing credentials prevent startup rather than silently degrading to mock behavior.
+Production mode requires `AML_LLM_MODE=competition`, a strong `AML_API_KEY` (minimum 16 characters), an `OPENAI_API_KEY`, HTTPS for all chat, embedding, and rerank endpoints, and a PostgreSQL `DATABASE_URL`. Missing embedding credentials do not silently degrade to mock vectors. Model Authorization headers do not follow redirects.
 
 ### 5.4 Provider resilience
 
-Upstream model calls use bounded retries with exponential backoff and `Retry-After` header respect. HTTP errors include the upstream response body for diagnostics. Rerank failures degrade to rule-based ranking rather than failing the Search request.
+Upstream model calls use bounded retries with exponential backoff and `Retry-After` header respect. HTTP errors expose status and safe diagnostic identifiers without returning the upstream response body. Rerank failures degrade to rule-based ranking rather than failing the Search request.
 
 ### 5.5 No benchmark hard-coding
 
@@ -141,7 +141,7 @@ The `eval/retrieval.py` module evaluates retrieval quality against JSONL panels 
 
 ### 7.3 Measured performance
 
-Local end-to-end verification with 24 concurrent synchronous Add calls completed in approximately 0.36 seconds, with a measured Search latency of approximately 0.081 seconds in `dev_mock` mode. Production Search latency with live embedding and rerank calls is approximately 4-6 seconds depending on provider response time.
+Local end-to-end verification with 24 concurrent synchronous Add calls completed in approximately 0.35 seconds, with a measured Search latency of approximately 0.110 seconds in `dev_mock` mode. Production Search latency with live embedding and rerank calls was approximately 4-6 seconds in an earlier deployment; the current code has not been tested remotely.
 
 ## 8. Configuration
 

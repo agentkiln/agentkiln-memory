@@ -50,7 +50,7 @@ Command:
 python scripts/local_verify.py --port 8123 --concurrency 24
 ```
 
-Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.35 seconds, 12 returned evidence windows, and measured Search latency of about 0.096 seconds in `dev_mock` mode.
+Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.35 seconds, 13 returned evidence windows, and measured Search latency of about 0.110 seconds in `dev_mock` mode.
 
 ## Verified on the prior PandaStack deployment
 

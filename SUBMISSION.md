@@ -34,6 +34,7 @@ AgentKiln Memory is an evidence-only long-term memory service. It persists sourc
 - Search evidence budget: 8,000 tokens by default; 24 returned windows by default.
 - In-process concurrency limits: Add 16, Search 32.
 - Add returns only after the request is durably stored and immediately searchable.
+- Production model endpoints require HTTPS, and malformed model vectors cannot be stored.
 
 ## Capacity declaration
 

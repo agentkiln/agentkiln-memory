@@ -191,7 +191,7 @@ Unit and integration tests cover API contract, user isolation, persistence, conc
 ```
 
 - `request_id`: unique identifier for deduplication and retry safety
-- `messages`: 1 to 200 messages, each with `role`, `content`, and optional `timestamp`
+- `messages`: 1 to 200 messages, each with `role`, `content`, and optional Unix-millisecond `timestamp` (years 1-9999)
 - `user_id`: strict isolation boundary
 - `session_id`: conversation grouping for adjacent-turn expansion
 
@@ -256,7 +256,7 @@ The search pipeline processes a query through five stages:
 
 1. **Query analysis**: an LLM call extracts retrieval cues, facets, and temporal intent from the query. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
 
-2. **Lexical search**: SQLite FTS5 or PostgreSQL full-text search retrieves candidates using BM25 ranking, Unicode normalization, Porter tokenization, and CJK n-grams.
+2. **Lexical search**: SQLite FTS5 or PostgreSQL full-text search retrieves candidates using BM25 ranking, Unicode normalization, Porter tokenization, and CJK terms including single characters. SQLite also searches the scoped source text for single-character queries against records written with the older index format.
 
 3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Only vectors from the same embedding model and dimension are considered. Embedding writes are split into batches of at most 10 texts for `text-embedding-v4` compatibility.
 
@@ -270,7 +270,7 @@ The search pipeline processes a query through five stages:
 |----------|---------|---------|
 | `AML_DATABASE_PATH` | `data/memory.db` | SQLite database path |
 | `DATABASE_URL` | empty | PostgreSQL URL; when set, the PostgreSQL backend is used |
-| `AML_PRODUCTION` | empty | Set to `1` to require competition mode and API-key auth |
+| `AML_PRODUCTION` | empty | Set to `1` to require competition mode, API-key auth, HTTPS model endpoints, and PostgreSQL `DATABASE_URL` |
 | `AML_LLM_MODE` | `off` | `off`, `dev_mock`, or `competition` |
 | `AML_API_KEY` | empty | Optional Add/Search authentication |
 | `OPENAI_API_KEY` | empty | Runtime model credential |
@@ -391,6 +391,9 @@ See [AGENTS.md](AGENTS.md) for the full development rules and verification workf
 - Do not commit `.env`, API keys, or system credentials
 - Health is public; Add and Search can require Bearer, Token, or `X-Api-Key` authentication
 - The service does not log request bodies or credentials
+- Production requires HTTPS for chat, embedding, and rerank endpoints; model credentials are not forwarded on redirects
+- Production requires a PostgreSQL `DATABASE_URL` and fails startup if it is missing
+- Upstream error bodies are not returned in Add/Search error details
 - All memories are retrieved only through the exact submitted `user_id`
 - Delete the database or Docker volume after evaluation or testing runs complete
 
