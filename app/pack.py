@@ -62,6 +62,7 @@ def pack_windows(
             continue
         content = "\n".join(lines)
         used += estimate_tokens(content)
-        output.append(PackedWindow(anchor.id, score, content, tuple(ids)))
+        source_id = anchor.id if anchor.id in ids else ids[0]
+        output.append(PackedWindow(source_id, score, content, tuple(ids)))
         seen.update(ids)
     return output

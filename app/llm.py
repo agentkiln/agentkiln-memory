@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
+import re
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from dataclasses import dataclass
 
 from .config import Settings
@@ -14,6 +17,10 @@ from .schemas import MemoryMessage
 
 class LLMUnavailable(RuntimeError):
     pass
+
+
+logger = logging.getLogger("uvicorn.error")
+EMBEDDING_BATCH_SIZE = 10
 
 
 @dataclass(frozen=True)
@@ -33,25 +40,43 @@ class MemoryLLM:
 
     def _require_competition_key(self) -> None:
         if self.settings.llm_mode == "competition" and not self.settings.openai_api_key:
+            logger.error("llm unavailable reason=missing_api_key mode=competition")
             raise LLMUnavailable("OPENAI_API_KEY is required in competition mode")
 
     def rerank(self, query: str, documents: list[str]) -> list[float] | None:
         """Return relevance scores aligned with documents, or None when rerank is unavailable."""
-        if not self.settings.rerank_model or not self.settings.rerank_api_key:
+        if (
+            self.settings.llm_mode != "competition"
+            or not self.settings.rerank_model
+            or not self.settings.rerank_api_key
+        ):
             return None
         if not documents:
             return []
-        payload = {"model": self.settings.rerank_model, "query": query, "documents": documents}
+        native_dashscope = self.settings.rerank_model == "qwen3.7-text-rerank"
+        if native_dashscope:
+            parsed = urlparse(self.settings.rerank_base_url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            path = "/api/v1/services/rerank/text-rerank/text-rerank"
+            payload = {
+                "model": self.settings.rerank_model,
+                "input": {"query": query, "documents": documents},
+            }
+        else:
+            base_url = self.settings.rerank_base_url
+            path = "/rerank"
+            payload = {"model": self.settings.rerank_model, "query": query, "documents": documents}
         try:
             body = self._post(
-                "/rerank",
+                path,
                 payload,
-                base_url=self.settings.rerank_base_url,
+                base_url=base_url,
                 api_key=self.settings.rerank_api_key,
             )
         except LLMUnavailable:
             return None
-        results = body.get("results") if isinstance(body, dict) else None
+        source = body.get("output") if native_dashscope else body
+        results = source.get("results") if isinstance(source, dict) else None
         if not isinstance(results, list):
             return None
         scores: list[float | None] = [None] * len(documents)
@@ -62,7 +87,7 @@ class MemoryLLM:
             score = item.get("relevance_score", item.get("score"))
             if not isinstance(index, int) or not (0 <= index < len(documents)):
                 continue
-            if isinstance(score, (int, float)):
+            if type(score) in {int, float} and math.isfinite(score):
                 scores[index] = float(score)
         if any(value is None for value in scores):
             return None
@@ -72,17 +97,26 @@ class MemoryLLM:
         self._require_competition_key()
         if self.settings.llm_mode != "competition" or not self.settings.embedding_api_key:
             return [self._mock_embedding(text) for text in texts]
-        payload = {"model": self.settings.embedding_model, "input": texts}
-        body = self._post(
-            "/embeddings",
-            payload,
-            base_url=self.settings.embedding_base_url,
-            api_key=self.settings.embedding_api_key,
-        )
-        rows = sorted(body.get("data", []), key=lambda row: row.get("index", 0))
-        vectors = [[float(value) for value in row["embedding"]] for row in rows]
-        if len(vectors) != len(texts):
-            raise LLMUnavailable("embedding response count mismatch")
+        vectors: list[list[float]] = []
+        for offset in range(0, len(texts), EMBEDDING_BATCH_SIZE):
+            batch = texts[offset : offset + EMBEDDING_BATCH_SIZE]
+            body = self._post(
+                "/embeddings",
+                {"model": self.settings.embedding_model, "input": batch},
+                base_url=self.settings.embedding_base_url,
+                api_key=self.settings.embedding_api_key,
+            )
+            data = body.get("data")
+            if not isinstance(data, list) or len(data) != len(batch):
+                raise LLMUnavailable("embedding response count mismatch")
+            if (
+                any(not isinstance(row, dict) or type(row.get("index")) is not int for row in data)
+                or {row["index"] for row in data} != set(range(len(batch)))
+            ):
+                raise LLMUnavailable("embedding response index mismatch")
+            rows = sorted(data, key=lambda row: row["index"])
+            batch_vectors = [[float(value) for value in row["embedding"]] for row in rows]
+            vectors.extend(batch_vectors)
         dimensions = {len(vector) for vector in vectors}
         if len(dimensions) > 1 or (vectors and len(vectors[0]) == 0):
             raise LLMUnavailable("embedding dimensions are inconsistent")
@@ -169,9 +203,21 @@ class MemoryLLM:
     ) -> dict:
         resolved_base_url = base_url or self.settings.openai_base_url
         resolved_api_key = api_key or self.settings.openai_api_key
+        model = payload.get("model") if isinstance(payload, dict) else None
+        endpoint = self._endpoint_label(resolved_base_url)
         attempts = 3
         last_error: Exception | None = None
         for attempt in range(attempts):
+            started = time.perf_counter()
+            logger.info(
+                "llm call start endpoint=%s path=%s model=%s attempt=%d/%d timeout_s=%.1f",
+                endpoint,
+                path,
+                model,
+                attempt + 1,
+                attempts,
+                self.settings.timeout_seconds,
+            )
             request = urllib.request.Request(
                 f"{resolved_base_url}{path}",
                 data=json.dumps(payload).encode("utf-8"),
@@ -183,20 +229,90 @@ class MemoryLLM:
             )
             try:
                 with urllib.request.urlopen(request, timeout=self.settings.timeout_seconds) as response:
-                    return self._decode_response(response.read())
+                    decoded = self._decode_response(response.read())
+                    logger.info(
+                        "llm call success endpoint=%s path=%s model=%s attempt=%d/%d "
+                        "duration_ms=%.1f",
+                        endpoint,
+                        path,
+                        model,
+                        attempt + 1,
+                        attempts,
+                        (time.perf_counter() - started) * 1000,
+                    )
+                    return decoded
             except urllib.error.HTTPError as exc:
                 last_error = exc
+                body = self._error_body(exc)
+                error_code, request_id = self._error_identifiers(body)
+                status = exc.code
                 if exc.code not in {429, 500, 502, 503, 504} or attempt == attempts - 1:
+                    logger.error(
+                        "llm call failed endpoint=%s path=%s model=%s attempt=%d/%d "
+                        "status=%s duration_ms=%.1f error_code=%s request_id=%s",
+                        endpoint,
+                        path,
+                        model,
+                        attempt + 1,
+                        attempts,
+                        status,
+                        (time.perf_counter() - started) * 1000,
+                        error_code,
+                        request_id,
+                    )
                     raise LLMUnavailable(
-                        f"model request failed: HTTP {exc.code} {self._error_body(exc)}"
+                        f"model request failed: HTTP {exc.code} {body}"
                     ) from exc
                 delay = self._retry_delay(exc, attempt)
+                logger.warning(
+                    "llm call retry endpoint=%s path=%s model=%s attempt=%d/%d "
+                    "status=%s retry_in_s=%.1f error_code=%s request_id=%s",
+                    endpoint,
+                    path,
+                    model,
+                    attempt + 1,
+                    attempts,
+                    status,
+                    delay,
+                    error_code,
+                    request_id,
+                )
             except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
                 if attempt == attempts - 1:
+                    logger.error(
+                        "llm call failed endpoint=%s path=%s model=%s attempt=%d/%d "
+                        "duration_ms=%.1f error_type=%s",
+                        endpoint,
+                        path,
+                        model,
+                        attempt + 1,
+                        attempts,
+                        (time.perf_counter() - started) * 1000,
+                        type(exc).__name__,
+                    )
                     raise LLMUnavailable(f"model request failed: {exc}") from exc
                 delay = 0.2 * (2**attempt)
+                logger.warning(
+                    "llm call retry endpoint=%s path=%s model=%s attempt=%d/%d "
+                    "retry_in_s=%.1f error_type=%s",
+                    endpoint,
+                    path,
+                    model,
+                    attempt + 1,
+                    attempts,
+                    delay,
+                    type(exc).__name__,
+                )
             time.sleep(delay)
+        logger.error(
+            "llm call failed endpoint=%s path=%s model=%s attempts=%d error=%s",
+            endpoint,
+            path,
+            model,
+            attempts,
+            last_error,
+        )
         raise LLMUnavailable(f"model request failed: {last_error}")
 
     @staticmethod
@@ -216,6 +332,36 @@ class MemoryLLM:
         except Exception:
             return ""
         return body[:limit]
+
+    @staticmethod
+    def _error_identifiers(body: str) -> tuple[str, str]:
+        try:
+            parsed = json.loads(body)
+        except (TypeError, ValueError):
+            return "unknown", "unknown"
+        if not isinstance(parsed, dict):
+            return "unknown", "unknown"
+        error = parsed.get("error")
+        nested = error if isinstance(error, dict) else {}
+
+        def safe(value: object) -> str:
+            if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,80}", value):
+                return value
+            return "unknown"
+
+        code = safe(parsed.get("code"))
+        if code == "unknown":
+            code = safe(nested.get("code"))
+        if code == "unknown":
+            code = safe(nested.get("type"))
+        return code, safe(parsed.get("request_id"))
+
+    @staticmethod
+    def _endpoint_label(base_url: str) -> str:
+        parsed = urlparse(base_url)
+        if parsed.hostname:
+            return parsed.netloc.split("@")[-1]
+        return "<invalid-url>"
 
     @staticmethod
     def _decode_response(raw: bytes | str) -> dict:

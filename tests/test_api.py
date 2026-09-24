@@ -1,10 +1,15 @@
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.db import MemoryRow
+from app.llm import MemoryLLM, QueryPlan
 from app.main import create_app
+from app.schemas import SearchRequest
+from app.service import MemoryService
 
 
 def settings(tmp_path: Path, api_key: str | None = None) -> Settings:
@@ -136,6 +141,125 @@ def test_top_k_and_options_contract(tmp_path: Path) -> None:
     assert "jasmine tea" in result[0]["content"]
 
 
+def test_rerank_changes_search_output_order(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    for word in ("alpha", "beta"):
+        added = client.post(
+            "/add",
+            json={
+                "request_id": f"rerank-{word}",
+                "messages": [{"role": "user", "content": f"The launch code is {word}."}],
+                "user_id": "rerank-user",
+                "session_id": f"session-{word}",
+            },
+        )
+        assert added.status_code == 200
+
+    query = {"query": "What is the launch code?", "user_id": "rerank-user", "top_k": 1}
+    baseline = client.post("/search", json=query).json()["data"][0]
+    preferred = "beta" if "alpha" in baseline["content"] else "alpha"
+
+    def fake_rerank(_query: str, documents: list[str]) -> list[float]:
+        return [0.9 if preferred in document else 0.1 for document in documents]
+
+    configured = replace(
+        settings(tmp_path),
+        llm_mode="competition",
+        openai_api_key="test-key",
+        embedding_api_key="test-key",
+        rerank_model="qwen3.7-text-rerank",
+        rerank_api_key="test-key",
+        rerank_base_url="https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+    )
+    with (
+        patch("app.service.MemoryLLM.analyze_query", return_value=QueryPlan([], [], "none")),
+        patch(
+            "app.service.MemoryLLM.embed_texts",
+            side_effect=lambda texts: [MemoryLLM._mock_embedding(text) for text in texts],
+        ),
+        patch("app.service.MemoryLLM.rerank", side_effect=fake_rerank),
+    ):
+        reranked = TestClient(create_app(configured)).post("/search", json=query)
+
+    assert reranked.status_code == 200
+    assert preferred in reranked.json()["data"][0]["content"]
+
+
+def test_rerank_limits_documents_before_call(tmp_path: Path) -> None:
+    configured = replace(
+        settings(tmp_path),
+        llm_mode="competition",
+        openai_api_key="test-key",
+        embedding_api_key="test-key",
+        rerank_model="qwen3.7-text-rerank",
+        rerank_api_key="test-key",
+        candidate_limit=600,
+        max_output_items=5,
+    )
+    service = MemoryService(configured)
+    rows = [
+        MemoryRow(
+            id=f"memory-{index}", row_id=index, user_id="rerank-user",
+            session_id=f"session-{index}", request_id=f"request-{index}",
+            ordinal=0, role="user", content=f"launch code {index}",
+            occurred_at=None, created_at="2026-01-01T00:00:00Z",
+            search_text="", fts_rank=0.0,
+        )
+        for index in range(501)
+    ]
+
+    def fake_rerank(_query: str, documents: list[str]) -> list[float]:
+        assert len(documents) == 500
+        assert "launch code 500" not in documents
+        return [0.9 if document == "launch code 499" else 0.1 for document in documents]
+
+    with (
+        patch.object(service.database, "revision", return_value=1),
+        patch.object(service.database, "lexical_search", return_value=rows),
+        patch.object(service.database, "vector_search", return_value=[]),
+        patch.object(service.llm, "analyze_query", return_value=QueryPlan([], [], "none")),
+        patch.object(service.llm, "embed_texts", return_value=[[1.0, 0.0]]),
+        patch.object(service, "_fuse", return_value=rows),
+        patch.object(service, "_expand_neighbors", return_value=rows),
+        patch.object(service, "_suppress_superseded", return_value=rows),
+        patch.object(service, "_rank", return_value=[(1.0 - i / 1000, row) for i, row in enumerate(rows)]),
+        patch.object(service, "_windows", side_effect=lambda _user, ranked: [(score, row, [row]) for score, row in ranked[:5]]),
+        patch.object(service.llm, "rerank", side_effect=fake_rerank),
+    ):
+        result = service.search(SearchRequest(query="launch code", user_id="rerank-user", top_k=1))
+
+    assert result[0].id == "memory-499"
+
+
+def test_rerank_failure_is_retried_on_next_search(tmp_path: Path) -> None:
+    writer = TestClient(create_app(settings(tmp_path)))
+    assert writer.post("/add", json=add_payload()).status_code == 200
+    configured = replace(
+        settings(tmp_path),
+        llm_mode="competition",
+        openai_api_key="test-key",
+        embedding_api_key="test-key",
+        rerank_model="qwen3.7-text-rerank",
+        rerank_api_key="test-key",
+        rerank_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+    client = TestClient(create_app(configured))
+    query = {"query": "jasmine tea", "user_id": "user-a", "top_k": 5}
+
+    with (
+        patch("app.service.MemoryLLM.analyze_query", return_value=QueryPlan([], [], "none")),
+        patch(
+            "app.service.MemoryLLM.embed_texts",
+            side_effect=lambda texts: [MemoryLLM._mock_embedding(text) for text in texts],
+        ),
+        patch("app.service.MemoryLLM.rerank", return_value=None) as rerank,
+    ):
+        assert client.post("/search", json=query).status_code == 200
+        assert client.post("/search", json=query).status_code == 200
+
+    assert rerank.call_count == 2
+
+
 def test_authentication_and_restart_persistence(tmp_path: Path) -> None:
     configured = settings(tmp_path, api_key="secret")
     first = TestClient(create_app(configured))
@@ -171,6 +295,54 @@ def test_latest_update_prefers_corrected_value(tmp_path: Path) -> None:
         json={"query": "What is my latest favorite drink?", "user_id": "update-user", "top_k": 1},
     ).json()["data"][0]
     assert "jasmine tea" in latest["content"]
+
+
+def test_earliest_query_keeps_superseded_evidence(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    for request_id, timestamp, value in (
+        ("history-old", 1704067200000, "alpha"),
+        ("history-new", 1735689600000, "beta"),
+    ):
+        marker = "Correction: " if value == "beta" else ""
+        response = client.post(
+            "/add",
+            json={
+                "request_id": request_id,
+                "messages": [
+                    {
+                        "role": "user",
+                        "timestamp": timestamp,
+                        "content": f"{marker}The launch code for project zephyr is {value}.",
+                    }
+                ],
+                "user_id": "history-user",
+                "session_id": f"session-{value}",
+            },
+        )
+        assert response.status_code == 200
+
+    earliest = client.post(
+        "/search",
+        json={
+            "query": "What was the first launch code for project zephyr?",
+            "user_id": "history-user",
+            "top_k": 1,
+        },
+    )
+
+    assert earliest.status_code == 200
+    assert "alpha" in earliest.json()["data"][0]["content"]
+
+    with patch("app.service.MemoryLLM.rerank", side_effect=AssertionError("temporal rerank called")):
+        repeated = TestClient(create_app(settings(tmp_path))).post(
+            "/search",
+            json={
+                "query": "What was the first launch code for project zephyr?",
+                "user_id": "history-user",
+                "top_k": 1,
+            },
+        )
+    assert "alpha" in repeated.json()["data"][0]["content"]
 
 
 def test_streaming_prefix_visibility(tmp_path: Path) -> None:

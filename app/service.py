@@ -21,6 +21,9 @@ from .text import (
 )
 
 
+QWEN37_RERANK_MAX_DOCUMENTS = 500
+
+
 class MemoryService:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -121,9 +124,9 @@ class MemoryService:
         candidates = self._expand_neighbors(request.user_id, candidates)
         if not candidates:
             return []
-        candidates = self._suppress_superseded(candidates)
-
         intent = plan.intent if plan.intent != "none" else temporal_intent(request.query)
+        if intent != "earliest":
+            candidates = self._suppress_superseded(candidates)
         ordered = self._rank(
             request.query,
             request.options or [],
@@ -132,20 +135,30 @@ class MemoryService:
             query_terms,
             plan.terms + plan.facets,
         )
-        rerank_scores = self.llm.rerank(
-            request.query,
-            [row.content for row in candidates],
+        rerank_enabled = self.settings.llm_mode == "competition" and intent == "none" and bool(
+            self.settings.rerank_model and self.settings.rerank_api_key
         )
-        if rerank_scores is not None:
-            candidates = [
-                row
-                for _row, score in sorted(
-                    zip(candidates, rerank_scores),
-                    key=lambda item: item[1],
-                    reverse=True,
-                )
-                for row in [_row]
+        rerank_pool = (
+            ordered[:QWEN37_RERANK_MAX_DOCUMENTS]
+            if self.settings.rerank_model == "qwen3.7-text-rerank"
+            else ordered
+        )
+        rerank_scores = (
+            self.llm.rerank(request.query, [row.content for _score, row in rerank_pool])
+            if intent == "none"
+            else None
+        )
+        if rerank_scores is not None and len(rerank_scores) == len(rerank_pool):
+            reranked = sorted(
+                ((score, row) for score, (_rule_score, row) in zip(rerank_scores, rerank_pool)),
+                key=lambda item: item[0],
+                reverse=True,
+            )
+            ordered = reranked + [
+                (0.0, row) for _score, row in ordered[len(rerank_pool) :]
             ]
+        else:
+            rerank_scores = None
         windows = self._windows(request.user_id, ordered)
         packed = pack_windows(
             windows,
@@ -153,7 +166,7 @@ class MemoryService:
             max_tokens=self.settings.max_output_tokens,
             max_items=self.settings.max_output_items,
         )
-        rows_by_id = {row.id: row for row in candidates}
+        rows_by_id = {row.id: row for _score, _anchor, context in windows for row in context}
         output = [
             SearchItem(
                 id=window.source_id,
@@ -164,8 +177,9 @@ class MemoryService:
             for window in packed
             if window.source_id in rows_by_id
         ]
-        with self._cache_lock:
-            self._store_cache(cache_key, output)
+        if rerank_scores is not None or not rerank_enabled:
+            with self._cache_lock:
+                self._store_cache(cache_key, output)
         return [item.model_copy() for item in output]
 
     def _store_cache(self, cache_key: tuple[object, ...], output: list[SearchItem]) -> None:

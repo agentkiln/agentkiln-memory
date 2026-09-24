@@ -102,6 +102,7 @@ def test_pack_windows_does_not_repeat_seen_anchor_content() -> None:
         ("mem_anchor", "mem_first"),
         ("mem_later",),
     ]
+    assert all(window.source_id in window.source_ids for window in packed)
     assert "anchor content" not in packed[1].content
 
 
