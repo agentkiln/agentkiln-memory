@@ -1,5 +1,9 @@
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from app.db import memory_id_for
 from app.postgres_db import PostgresMemoryDatabase
+from app.service import MemoryService
 
 
 def _database_with_rows(monkeypatch, rows):
@@ -91,4 +95,47 @@ def test_postgres_neighbors_keep_add_message_order_without_timestamps(monkeypatc
         ("request-a", 0),
         ("request-a", 1),
         ("request-b", 0),
+    ]
+
+
+def test_postgres_search_windows_batch_overlapping_anchors_in_one_borrow(monkeypatch) -> None:
+    rows = [
+        (
+            memory_id_for("user-a", f"eval:sample:chunk-{index}", 0),
+            "user-a",
+            "session-a",
+            f"eval:sample:chunk-{index}",
+            0,
+            "user",
+            f"chunk {index}",
+            None,
+            "2026-01-01T00:00:00Z",
+            f"chunk {index}",
+        )
+        for index in range(4)
+    ]
+    database = _database_with_rows(monkeypatch, rows)
+    anchors = [
+        # Rank order differs from source order; adjacent anchors share context rows.
+        (
+            score,
+            next(
+                row
+                for row, _distance, _seed_rank in database.neighbors("user-a", [rows[index][0]])
+                if row.id == rows[index][0]
+            ),
+        )
+        for score, index in ((0.9, 2), (0.8, 1))
+    ]
+    service = MemoryService.__new__(MemoryService)
+    service.settings = SimpleNamespace(max_output_items=2)
+    service.database = database
+
+    with patch.object(database, "_connect", wraps=database._connect) as connect:
+        windows = service._windows("user-a", anchors)
+
+    assert connect.call_count == 1
+    assert [[row.request_id for row in context] for _score, _anchor, context in windows] == [
+        ["eval:sample:chunk-1", "eval:sample:chunk-2", "eval:sample:chunk-3"],
+        ["eval:sample:chunk-0", "eval:sample:chunk-1", "eval:sample:chunk-2"],
     ]

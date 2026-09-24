@@ -293,12 +293,17 @@ class MemoryService:
         ranked: list[tuple[float, MemoryRow]],
     ) -> list[tuple[float, MemoryRow, list[MemoryRow]]]:
         selected = ranked[: self.settings.max_output_items]
-        window_map: dict[str, list[MemoryRow]] = {}
-        for seed_rank, (_score, row) in enumerate(selected):
-            for context_row, _distance, _seed_rank in self.database.neighbors(user_id, [row.id], radius=1):
-                window_map.setdefault(row.id, [])
-                if all(existing.id != context_row.id for existing in window_map[row.id]):
-                    window_map[row.id].append(context_row)
+        if isinstance(self.database, PostgresMemoryDatabase):
+            window_map = self.database.neighbor_windows(
+                user_id, [row.id for _score, row in selected], radius=1
+            )
+        else:
+            window_map: dict[str, list[MemoryRow]] = {}
+            for _score, row in selected:
+                for context_row, _distance, _seed_rank in self.database.neighbors(user_id, [row.id], radius=1):
+                    window_map.setdefault(row.id, [])
+                    if all(existing.id != context_row.id for existing in window_map[row.id]):
+                        window_map[row.id].append(context_row)
         return [
             (
                 score,

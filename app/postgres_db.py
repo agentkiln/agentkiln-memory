@@ -258,6 +258,44 @@ class PostgresMemoryDatabase:
     def neighbors(self, user_id: str, seed_ids: list[str], radius: int = 1) -> list[tuple[MemoryRow, int, int]]:
         if not seed_ids or radius < 1:
             return []
+        by_session, positions = self._session_rows(user_id, seed_ids)
+        output: dict[str, tuple[MemoryRow, int, int]] = {}
+        for seed_rank, seed_id in enumerate(seed_ids):
+            location = positions.get(seed_id)
+            if not location:
+                continue
+            session_id, seed_index = location
+            session_rows = by_session[session_id]
+            start = max(0, seed_index - radius)
+            stop = min(len(session_rows), seed_index + radius + 1)
+            for index in range(start, stop):
+                distance = abs(index - seed_index)
+                row = session_rows[index]
+                current = output.get(row.id)
+                candidate = (row, distance, seed_rank)
+                if current is None or (distance, seed_rank) < (current[1], current[2]):
+                    output[row.id] = candidate
+        return list(output.values())
+
+    def neighbor_windows(self, user_id: str, seed_ids: list[str], radius: int = 1) -> dict[str, list[MemoryRow]]:
+        if not seed_ids or radius < 1:
+            return {}
+        by_session, positions = self._session_rows(user_id, seed_ids)
+        windows: dict[str, list[MemoryRow]] = {}
+        for seed_id in seed_ids:
+            location = positions.get(seed_id)
+            if not location:
+                continue
+            session_id, seed_index = location
+            session_rows = by_session[session_id]
+            windows[seed_id] = session_rows[
+                max(0, seed_index - radius) : min(len(session_rows), seed_index + radius + 1)
+            ]
+        return windows
+
+    def _session_rows(
+        self, user_id: str, seed_ids: list[str]
+    ) -> tuple[dict[str, list[MemoryRow]], dict[str, tuple[str, int]]]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -266,7 +304,7 @@ class PostgresMemoryDatabase:
                 )
                 session_ids = sorted(row[0] for row in cursor.fetchall())
                 if not session_ids:
-                    return []
+                    return {}, {}
                 cursor.execute(
                     """
                     SELECT id, user_id, session_id, request_id, ordinal, role,
@@ -304,23 +342,7 @@ class PostgresMemoryDatabase:
             for session_id, session_rows in by_session.items()
             for index, row in enumerate(session_rows)
         }
-        output: dict[str, tuple[MemoryRow, int, int]] = {}
-        for seed_rank, seed_id in enumerate(seed_ids):
-            location = positions.get(seed_id)
-            if not location:
-                continue
-            session_id, seed_index = location
-            session_rows = by_session[session_id]
-            start = max(0, seed_index - radius)
-            stop = min(len(session_rows), seed_index + radius + 1)
-            for index in range(start, stop):
-                distance = abs(index - seed_index)
-                row = session_rows[index]
-                current = output.get(row.id)
-                candidate = (row, distance, seed_rank)
-                if current is None or (distance, seed_rank) < (current[1], current[2]):
-                    output[row.id] = candidate
-        return list(output.values())
+        return by_session, positions
 
     def revision(self, user_id: str) -> int:
         with self._connect() as connection:
