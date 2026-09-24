@@ -79,7 +79,7 @@ def _cjk_segments(run: str) -> list[str]:
 
 
 def lexical_terms(
-    value: str, limit: int = 256, *, index_cjk_characters: bool = False
+    value: str, limit: int | None = 256, *, index_cjk_characters: bool = False
 ) -> list[str]:
     normalized = normalize_text(value)
     ordered: dict[str, None] = {}

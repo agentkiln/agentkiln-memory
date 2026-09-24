@@ -65,6 +65,7 @@ class Settings:
     rerank_api_key: str | None = None
     rerank_base_url: str = ""
     database_url: str | None = None
+    query_model_max_chars: int = 16_000
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -120,11 +121,12 @@ class Settings:
             rerank_base_url=rerank_base_url,
             timeout_seconds=float(os.getenv("AML_TIMEOUT_SECONDS", "90")),
             candidate_limit=max(40, min(2000, int(os.getenv("AML_CANDIDATE_LIMIT", "300")))),
-            max_output_tokens=max(1000, int(os.getenv("AML_MAX_OUTPUT_TOKENS", "8000"))),
-            max_output_items=max(1, min(100, int(os.getenv("AML_MAX_OUTPUT_ITEMS", "24")))),
+            max_output_tokens=max(1000, int(os.getenv("AML_MAX_OUTPUT_TOKENS", "32000"))),
+            max_output_items=max(1, min(100, int(os.getenv("AML_MAX_OUTPUT_ITEMS", "100")))),
             vector_min_similarity=float(os.getenv("AML_VECTOR_MIN_SIMILARITY", "0.35")),
             vector_only_min_similarity=float(os.getenv("AML_VECTOR_ONLY_MIN_SIMILARITY", "0.65")),
             search_concurrency=max(1, min(256, int(os.getenv("AML_SEARCH_CONCURRENCY", "32")))),
             add_concurrency=max(1, min(64, int(os.getenv("AML_ADD_CONCURRENCY", "16")))),
             database_url=database_url,
+            query_model_max_chars=max(512, int(os.getenv("AML_QUERY_MODEL_MAX_CHARS", "16000"))),
         )

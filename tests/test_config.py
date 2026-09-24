@@ -23,8 +23,19 @@ def test_default_max_output_items_matches_deployment(monkeypatch, tmp_path: Path
     monkeypatch.setenv("AML_DATABASE_PATH", str(tmp_path / "memory.db"))
     monkeypatch.setenv("AML_LLM_MODE", "off")
     monkeypatch.delenv("AML_MAX_OUTPUT_ITEMS", raising=False)
+    monkeypatch.delenv("AML_MAX_OUTPUT_TOKENS", raising=False)
+    monkeypatch.delenv("AML_QUERY_MODEL_MAX_CHARS", raising=False)
     settings = Settings.from_env()
-    assert settings.max_output_items == 24
+    assert settings.max_output_items == 100
+    assert settings.max_output_tokens == 32_000
+    assert settings.query_model_max_chars == 16_000
+
+
+def test_model_query_budget_can_be_raised(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("AML_DATABASE_PATH", str(tmp_path / "memory.db"))
+    monkeypatch.setenv("AML_LLM_MODE", "off")
+    monkeypatch.setenv("AML_QUERY_MODEL_MAX_CHARS", "32000")
+    assert Settings.from_env().query_model_max_chars == 32_000
 
 
 def test_embedding_reuses_chat_credentials_by_default(monkeypatch, tmp_path: Path) -> None:

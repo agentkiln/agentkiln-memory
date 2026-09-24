@@ -775,27 +775,95 @@ def test_search_accepts_long_query_with_question_at_the_end(tmp_path: Path) -> N
     assert any("jasmine tea" in item["content"] for item in response.json()["data"])
 
 
-def test_long_query_sent_to_models_is_bounded_and_keeps_both_ends(tmp_path: Path) -> None:
+def test_long_query_uses_full_embedding_and_bounded_analysis_and_rerank(
+    tmp_path: Path, caplog
+) -> None:
     service = MemoryService(settings(tmp_path))
     service.initialize()
     service.add(AddRequest(**add_payload()))
-    query = "What drink " + ("background " * 1_000) + "What drink do I prefer?"
-    assert len(query) > 8_000
+    query = "What drink " + ("background " * 2_000) + "What drink do I prefer?"
+    assert len(query) > 16_000
     try:
         with (
+            caplog.at_level(logging.INFO, logger="uvicorn.error"),
             patch.object(service.llm, "analyze_query", wraps=service.llm.analyze_query) as analyze,
             patch.object(service.llm, "embed_texts", wraps=service.llm.embed_texts) as embed,
             patch.object(service.llm, "rerank", wraps=service.llm.rerank) as rerank,
         ):
             service.search(SearchRequest(query=query, user_id="user-a", top_k=5))
-        model_queries = [
-            analyze.call_args.args[0],
-            embed.call_args.args[0][0],
-            rerank.call_args.args[0],
-        ]
-        assert all(len(value) <= 8_000 for value in model_queries)
+        model_queries = [analyze.call_args.args[0], rerank.call_args.args[0]]
+        assert all(len(value) <= 16_000 for value in model_queries)
         assert all(value.startswith("What drink ") for value in model_queries)
         assert all(value.endswith("What drink do I prefer?") for value in model_queries)
+        assert embed.call_args.args[0] == [query]
+        assert "search query model context compacted" in caplog.text
+        assert "What drink do I prefer?" not in caplog.text
+    finally:
+        service.close()
+
+
+def test_long_query_middle_cue_remains_searchable(tmp_path: Path) -> None:
+    service = MemoryService(settings(tmp_path))
+    service.initialize()
+    payload = add_payload()
+    payload["messages"] = [{"role": "user", "content": "The archive code is cobalt lantern."}]
+    service.add(AddRequest(**payload))
+    query = ("preface " * 1_400) + "cobalt lantern " + ("padding " * 2_000)
+    query += "Please recall the detail."
+    assert len(query) > 16_000
+    try:
+        with patch.object(service.database, "vector_search", return_value=[]):
+            found = service.search(SearchRequest(query=query, user_id="user-a", top_k=5))
+        assert any("cobalt lantern" in item.content for item in found)
+    finally:
+        service.close()
+
+
+def test_long_query_middle_cue_survives_many_distinct_noise_terms(tmp_path: Path) -> None:
+    service = MemoryService(settings(tmp_path))
+    service.initialize()
+    payload = add_payload()
+    payload["messages"] = [{"role": "user", "content": "The archive code is cobalt lantern."}]
+    service.add(AddRequest(**payload))
+    query = " ".join(f"noise{index:04d}" for index in range(1_400))
+    query += " cobalt lantern "
+    query += " ".join(f"padding{index:04d}" for index in range(1_400))
+    query += " Please recall the detail."
+    try:
+        with patch.object(service.database, "vector_search", return_value=[]):
+            found = service.search(SearchRequest(query=query, user_id="user-a", top_k=5))
+        assert any("cobalt lantern" in item.content for item in found)
+    finally:
+        service.close()
+
+
+def test_search_builds_only_requested_number_of_windows(tmp_path: Path) -> None:
+    service = MemoryService(replace(settings(tmp_path), max_output_items=100))
+    service.initialize()
+    payload = add_payload()
+    payload["messages"] = [
+        {"role": "user", "content": f"Archive milestone {index}"} for index in range(30)
+    ]
+    service.add(AddRequest(**payload))
+    try:
+        with patch.object(service, "_windows", wraps=service._windows) as windows:
+            service.search(SearchRequest(query="archive milestone", user_id="user-a", top_k=1))
+        assert len(windows.call_args.args[1]) == 1
+    finally:
+        service.close()
+
+
+def test_model_query_budget_can_include_more_context(tmp_path: Path) -> None:
+    configured = replace(settings(tmp_path), query_model_max_chars=24_000)
+    service = MemoryService(configured)
+    service.initialize()
+    service.add(AddRequest(**add_payload()))
+    query = ("context " * 4_000) + "What drink do I prefer?"
+    try:
+        with patch.object(service.llm, "analyze_query", wraps=service.llm.analyze_query) as analyze:
+            service.search(SearchRequest(query=query, user_id="user-a", top_k=5))
+        assert len(analyze.call_args.args[0]) == 24_000
+        assert analyze.call_args.args[0].endswith("What drink do I prefer?")
     finally:
         service.close()
 

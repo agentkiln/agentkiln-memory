@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 from collections import defaultdict
 
@@ -24,16 +25,31 @@ from .text import (
 
 
 QWEN37_RERANK_MAX_DOCUMENTS = 500
-SEARCH_QUERY_MAX_CHARS = 8_000
-SEARCH_QUERY_TAIL_CHARS = 6_000
 SEARCH_QUERY_PRIORITY_CHARS = 512
+SEARCH_QUERY_LEXICAL_TERMS = 160
+SEARCH_QUERY_PRIORITY_TERMS = 80
+logger = logging.getLogger("uvicorn.error")
 
 
-def _bounded_search_query(query: str) -> str:
-    if len(query) <= SEARCH_QUERY_MAX_CHARS:
+def _bounded_search_query(query: str, max_chars: int) -> str:
+    if len(query) <= max_chars:
         return query
-    head_length = SEARCH_QUERY_MAX_CHARS - SEARCH_QUERY_TAIL_CHARS - 1
-    return f"{query[:head_length]}\n{query[-SEARCH_QUERY_TAIL_CHARS:]}"
+    head_length = (max_chars - 1) // 4
+    tail_length = max_chars - head_length - 1
+    return f"{query[:head_length]}\n{query[-tail_length:]}"
+
+
+def _long_query_terms(query: str, excerpt: str, terms: list[str], facets: list[str]) -> list[str]:
+    priority_text = " ".join(
+        terms + facets + [excerpt[-SEARCH_QUERY_PRIORITY_CHARS:]]
+        + semantic_terms(excerpt[-SEARCH_QUERY_PRIORITY_CHARS:], limit=32)
+    )
+    priority = lexical_terms(priority_text, limit=SEARCH_QUERY_PRIORITY_TERMS)
+    seen = set(priority)
+    remaining = [term for term in lexical_terms(query, limit=None) if term not in seen]
+    # Prefer descriptive terms to numbered transcript noise, while retaining tail/question cues.
+    remaining.sort(key=lambda term: (any(character.isdigit() for character in term), -len(term)))
+    return (priority + remaining)[:SEARCH_QUERY_LEXICAL_TERMS]
 
 
 class MemoryService:
@@ -98,32 +114,39 @@ class MemoryService:
             self.settings.rerank_model,
             self.settings.search_concurrency,
             self.settings.add_concurrency,
+            self.settings.query_model_max_chars,
         )
         with self._cache_lock:
             cached = self._cache.get(cache_key)
         if cached is not None:
             return [item.model_copy() for item in cached]
 
-        search_query = _bounded_search_query(request.query)
+        search_query = _bounded_search_query(request.query, self.settings.query_model_max_chars)
+        if len(search_query) < len(request.query):
+            logger.info(
+                "search query model context compacted query_chars=%d model_chars=%d",
+                len(request.query),
+                len(search_query),
+            )
         plan = self.llm.analyze_query(search_query, request.options)
-        if len(request.query) > SEARCH_QUERY_MAX_CHARS:
-            query_parts = (
-                [search_query[-SEARCH_QUERY_PRIORITY_CHARS:]]
-                + plan.terms
-                + plan.facets
-                + semantic_terms(search_query, limit=96)
-                + [search_query]
+        if (
+            len(request.query) > self.settings.query_model_max_chars
+            or len(lexical_terms(request.query, limit=SEARCH_QUERY_LEXICAL_TERMS + 1))
+            > SEARCH_QUERY_LEXICAL_TERMS
+        ):
+            query_terms = _long_query_terms(
+                request.query, search_query, plan.terms, plan.facets
             )
         else:
             query_parts = [search_query] + plan.terms + plan.facets + semantic_terms(search_query, limit=96)
-        query_terms = lexical_terms(" ".join(query_parts), limit=160)
+            query_terms = lexical_terms(" ".join(query_parts), limit=SEARCH_QUERY_LEXICAL_TERMS)
         query = fts_query(query_terms)
         lexical_rows = self.database.lexical_search(
             request.user_id,
             query,
             self.settings.candidate_limit,
         )
-        query_vector = self.llm.embed_texts([search_query])[0]
+        query_vector = self.llm.embed_texts([request.query])[0]
         vector_rows = self.database.vector_search(
             request.user_id,
             query_vector,
@@ -149,7 +172,7 @@ class MemoryService:
         candidates = self._expand_neighbors(request.user_id, candidates)
         if not candidates:
             return []
-        intent = plan.intent if plan.intent != "none" else temporal_intent(search_query)
+        intent = plan.intent if plan.intent != "none" else temporal_intent(request.query)
         if intent != "earliest":
             candidates = self._suppress_superseded(candidates)
         ordered = self._rank(
@@ -184,7 +207,9 @@ class MemoryService:
             ]
         else:
             rerank_scores = None
-        windows = self._windows(request.user_id, ordered)
+        windows = self._windows(
+            request.user_id, ordered[: min(request.top_k, self.settings.max_output_items)]
+        )
         packed = pack_windows(
             windows,
             top_k=request.top_k,
