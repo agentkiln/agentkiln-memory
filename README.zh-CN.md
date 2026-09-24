@@ -58,7 +58,7 @@ AgentKiln Memory 是一个证据型长期记忆服务，为 AI Agent 提供基�
 - **Token 预算控制**：证据窗口遵循可配置的 token 预算，返回数量不超过 `top_k`
 - **PostgreSQL 或 SQLite**：生产环境使用 PostgreSQL，本地开发使用 SQLite 与 FTS5
 - **OpenAI 兼容嵌入**：任何提供 `POST /v1/embeddings` 的服务都可用，包括 Jina、OpenRouter、NVIDIA NIM 和 SiliconFlow
-- **生产部署**：Docker、Compose、Caddy HTTPS 反向代理、健康检查和 GitHub Actions 自动部署
+- **生产部署**：Docker、Compose、Caddy HTTPS 反向代理、健康检查和 GitHub Actions 手动部署
 - **隐私优先**：不记录请求体，不持久化凭据，评测数据在 30 天内删除
 
 ## 系统架构
@@ -307,7 +307,7 @@ docker compose up -d
 
 ### 生产环境
 
-完整生产部署指南见 [deploy/PandaStack.md](deploy/PandaStack.md)，包括托管 PostgreSQL、HTTPS 反向代理、环境变量和 GitHub Actions 自动部署。
+完整生产部署指南见 [deploy/PandaStack.md](deploy/PandaStack.md)，包括托管 PostgreSQL、HTTPS 反向代理、环境变量和手动部署。
 
 ### 验证
 

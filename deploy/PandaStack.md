@@ -26,7 +26,7 @@ py scripts/init_postgres.py
 
 ## App
 
-Create an App from the private GitHub repository and select the `master` branch. The deploy workflow below also listens to `master`, so the App and workflow must use the same branch.
+Create an App from the private GitHub repository and select the `master` branch.
 
 Build command:
 
@@ -67,15 +67,15 @@ PandaStack logs include timestamps, model-call start and completion, retries, HT
 Long Add requests are split across bounded chat annotation and `text-embedding-v4` calls. The original messages are stored whole; larger requests may take longer because they require more upstream calls.
 With `AML_PRODUCTION=1`, chat, embedding, and rerank base URLs must all use HTTPS. `DATABASE_URL` must point to Managed PostgreSQL; the app fails startup if it is missing. SQLite remains the local development backend.
 
-## Auto Deploy
+## Manual Deploy
 
-This repository has `.github/workflows/deploy-pandastack.yml`, which calls the PandaStack deploy API on every push to `master`. Add a repository secret:
+Pushing to `master` no longer triggers the repository's PandaStack deploy workflow. Deploy the updated branch yourself from PandaStack, or run `.github/workflows/deploy-pandastack.yml` through GitHub Actions > Deploy to PandaStack > Run workflow. The GitHub Actions option requires this repository secret:
 
 ```text
 PANDASTACK_API_KEY = pds_...
 ```
 
-Create that token under PandaStack API Tokens. After that, `git push origin master` triggers a redeploy automatically.
+Create that token under PandaStack API Tokens if you want to use the manual GitHub Actions option. The workflow change only controls GitHub Actions. If your PandaStack App has a separate Git push auto-deploy setting, turn it off in the PandaStack App settings as well.
 
 ## Free-tier deploy headroom
 

@@ -66,7 +66,7 @@ Long-term memory is the backbone of capable AI agents. Most memory systems confl
 - **Token-bounded output**: evidence windows respect a configurable token budget, never exceeding `top_k`
 - **PostgreSQL or SQLite**: PostgreSQL with Managed PostgreSQL in production, SQLite with FTS5 for local development
 - **OpenAI-compatible embeddings**: any provider exposing `POST /v1/embeddings` works, including Jina, OpenRouter, NVIDIA NIM, and SiliconFlow
-- **Production deployment**: Docker, Compose, Caddy HTTPS reverse proxy, health checks, and automated GitHub Actions deploy
+- **Production deployment**: Docker, Compose, Caddy HTTPS reverse proxy, health checks, and manual GitHub Actions deploy
 - **Privacy-first**: no request body logging, no credential persistence, evaluation data deletion within 30 days
 
 ## Architecture
@@ -315,7 +315,7 @@ docker compose up -d
 
 ### Production
 
-See [deploy/PandaStack.md](deploy/PandaStack.md) for the full production deployment guide, including Managed PostgreSQL, HTTPS reverse proxy, environment variables, and automated GitHub Actions deployment.
+See [deploy/PandaStack.md](deploy/PandaStack.md) for the full production deployment guide, including Managed PostgreSQL, HTTPS reverse proxy, environment variables, and manual deployment.
 
 ### Verification
 
