@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 
@@ -251,8 +252,20 @@ ROOT_PAGE = """<!DOCTYPE html>
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or Settings.from_env()
     service = MemoryService(resolved)
-    service.initialize()
-    app = FastAPI(title="AgentKiln Memory", version=__version__)
+    try:
+        service.initialize()
+    except Exception:
+        service.close()
+        raise
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        try:
+            yield
+        finally:
+            service.close()
+
+    app = FastAPI(title="AgentKiln Memory", version=__version__, lifespan=lifespan)
 
     def authorize(
         authorization: str | None = Header(default=None),

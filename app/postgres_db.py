@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from datetime import datetime, timezone
+
+from psycopg_pool import ConnectionPool
 
 from .db import MemoryRow, memory_id_for
 from .postgres_schema import SCHEMA_SQL, cjk_terms, to_tsquery
@@ -15,15 +18,24 @@ class PostgresMemoryDatabase:
 
     def __init__(self, database_url: str):
         self.database_url = database_url
+        self.pool = ConnectionPool(
+            conninfo=database_url,
+            min_size=int(os.getenv("DB_POOL_MIN", "0")),
+            max_size=int(os.getenv("DB_POOL_MAX", "5")),
+            timeout=float(os.getenv("DB_POOL_TIMEOUT", "15")),
+            max_idle=float(os.getenv("DB_POOL_MAX_IDLE", "60")),
+            max_lifetime=float(os.getenv("DB_POOL_MAX_LIFETIME", "900")),
+            reconnect_timeout=float(os.getenv("DB_RECONNECT_TIMEOUT", "30")),
+            check=ConnectionPool.check_connection,
+            kwargs={"connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10"))},
+            open=True,
+        )
 
     def _connect(self):
-        try:
-            import psycopg
-        except ImportError as exc:  # pragma: no cover - deployment dependency
-            raise RuntimeError(
-                "psycopg is required for PostgreSQL deployment; install psycopg[binary]"
-            ) from exc
-        return psycopg.connect(self.database_url)
+        return self.pool.connection()
+
+    def close(self) -> None:
+        self.pool.close()
 
     def initialize(self) -> None:
         with self._connect() as connection:

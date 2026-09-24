@@ -40,6 +40,10 @@ class MemoryService:
     def initialize(self) -> None:
         self.database.initialize()
 
+    def close(self) -> None:
+        if isinstance(self.database, PostgresMemoryDatabase):
+            self.database.close()
+
     def add(self, request: AddRequest) -> None:
         with self._add_slots:
             self._add_unlocked(request)
