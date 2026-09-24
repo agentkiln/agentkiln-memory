@@ -15,6 +15,11 @@ from .schemas import AddRequest
 from .text import lexical_terms
 
 
+def memory_id_for(user_id: str, request_id: str, ordinal: int) -> str:
+    identity = json.dumps([user_id, request_id, ordinal], ensure_ascii=False, separators=(",", ":"))
+    return f"mem_{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:24]}"
+
+
 @dataclass(frozen=True)
 class MemoryRow:
     id: str
@@ -166,10 +171,7 @@ class MemoryDatabase:
                 ),
             )
             for ordinal, message in enumerate(request.messages):
-                digest = hashlib.sha256(
-                    f"{request.user_id}:{request.request_id}:{ordinal}".encode("utf-8")
-                ).hexdigest()[:24]
-                memory_id = f"mem_{digest}"
+                memory_id = memory_id_for(request.user_id, request.request_id, ordinal)
                 search_text = " ".join(
                     lexical_terms(f"{message.content}\n{annotations[ordinal]}", limit=384)
                 )

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from datetime import datetime, timezone
 
-from .db import MemoryRow
+from .db import MemoryRow, memory_id_for
 from .postgres_schema import SCHEMA_SQL, cjk_terms, to_tsquery
 from .schemas import AddRequest
 from .text import lexical_terms
@@ -88,10 +87,7 @@ class PostgresMemoryDatabase:
                     vector = embeddings[ordinal]
                     if not vector or not all(math.isfinite(value) for value in vector):
                         raise ValueError("embedding vectors must be finite and non-empty")
-                    digest = hashlib.sha256(
-                        f"{request.user_id}:{request.request_id}:{ordinal}".encode("utf-8")
-                    ).hexdigest()[:24]
-                    memory_id = f"mem_{digest}"
+                    memory_id = memory_id_for(request.user_id, request.request_id, ordinal)
                     search_text = " ".join(
                         lexical_terms(f"{message.content}\n{annotations[ordinal]}", limit=384)
                     )
