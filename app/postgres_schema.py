@@ -33,10 +33,9 @@ def cjk_terms(query: str) -> list[str]:
         return []
 
     multi_character = [term for term in terms if len(term) > 1]
-    selected = [terms[0]] if len(terms[0]) == 1 else []
+    selected = [terms[0]] if len(terms[0]) > 1 else []
+    selected.extend(term for term in terms if len(term) == 1 and term not in selected)
     selected.extend(term for term in multi_character if term not in selected)
-    if not multi_character:
-        selected.extend(term for term in terms if term not in selected)
     return selected[:MAX_CJK_LIKE_TERMS]
 
 

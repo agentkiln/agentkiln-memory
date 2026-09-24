@@ -48,3 +48,21 @@ def test_postgres_single_cjk_query_keeps_legacy_content_fallback(monkeypatch) ->
 
     assert sql.count("m.content LIKE %s") >= 1
     assert "%猫%" in params
+
+
+def test_postgres_single_cjk_fallback_is_independent_of_query_term_order(monkeypatch) -> None:
+    sql, params = _captured_query(monkeypatch, '"宠物" OR "猫"')
+
+    assert sql.count("m.content LIKE %s") >= 1
+    assert "%猫%" in params
+
+
+def test_postgres_cjk_fallback_keeps_multiple_single_characters_with_many_terms(monkeypatch) -> None:
+    multi_character = [chr(0x4E00 + index) + chr(0x4E20 + index) for index in range(12)]
+    query = " OR ".join(f'"{term}"' for term in [*multi_character, "猫", "狗"])
+
+    sql, params = _captured_query(monkeypatch, query)
+
+    assert sql.count("m.content LIKE %s") <= 12
+    assert "%猫%" in params
+    assert "%狗%" in params

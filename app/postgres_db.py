@@ -261,7 +261,7 @@ class PostgresMemoryDatabase:
                            content, occurred_at, created_at, search_text
                     FROM memories
                     WHERE user_id = %s AND session_id = ANY(%s)
-                    ORDER BY session_id, occurred_at NULLS FIRST, ordinal, id
+                    ORDER BY session_id, occurred_at NULLS FIRST, created_at, ordinal, id
                     """,
                     (user_id, session_ids),
                 )
@@ -283,6 +283,10 @@ class PostgresMemoryDatabase:
                 fts_rank=1_000.0,
             )
             by_session.setdefault(memory.session_id, []).append(memory)
+        for session_rows in by_session.values():
+            session_rows.sort(
+                key=lambda row: (*row.source_order()[:2], row.created_at, row.ordinal, row.id)
+            )
         positions = {
             row.id: (session_id, index)
             for session_id, session_rows in by_session.items()

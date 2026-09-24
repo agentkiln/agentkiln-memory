@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from .db import MemoryRow
-from .text import estimate_tokens
+from .text import CJK_RE, estimate_tokens
 
 
 @dataclass(frozen=True)
@@ -29,10 +29,20 @@ def render_line(row: MemoryRow) -> str:
 
 
 def truncate_line(line: str, max_tokens: int) -> str:
-    max_characters = max_tokens * 4
-    if len(line) <= max_characters:
+    if estimate_tokens(line) <= max_tokens:
         return line
-    return line[: max(0, max_characters - 3)].rstrip() + "..."
+    cjk_count = 0
+    other_count = 0
+    prefix_length = 0
+    for character in line:
+        if CJK_RE.fullmatch(character):
+            cjk_count += 1
+        else:
+            other_count += 1
+        if cjk_count + (other_count + 6) // 4 > max_tokens:
+            break
+        prefix_length += 1
+    return line[:prefix_length].rstrip() + "..."
 
 
 def pack_windows(

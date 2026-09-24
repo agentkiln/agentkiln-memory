@@ -2,6 +2,7 @@ from pathlib import Path
 
 from app.db import MemoryRow
 from app.pack import pack_windows
+from app.text import estimate_tokens
 
 
 def row(memory_id: str, content: str, ordinal: int = 0) -> MemoryRow:
@@ -82,6 +83,20 @@ def test_pack_windows_truncates_oversized_cjk_source_within_budget() -> None:
         max_items=1,
     )
     assert len(packed) == 1
+    assert packed[0].content.endswith("...")
+
+
+def test_pack_windows_keeps_long_cjk_source_within_large_budget() -> None:
+    oversized = row("mem_cjk_long", "京都" * 1500)
+    packed = pack_windows(
+        [(0.9, oversized, [oversized])],
+        top_k=1,
+        max_tokens=1000,
+        max_items=1,
+    )
+    assert len(packed) == 1
+    assert packed[0].source_id == "mem_cjk_long"
+    assert estimate_tokens(packed[0].content) <= 1000
     assert packed[0].content.endswith("...")
 
 
