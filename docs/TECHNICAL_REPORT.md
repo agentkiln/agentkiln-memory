@@ -91,17 +91,17 @@ The SQLite backend uses WAL journaling, a 60-second busy timeout, and FTS5 with 
 
 ### 4.2 Search path
 
-1. **Query analysis**: long queries are accepted, with up to 8,000 characters taken from the beginning and end for retrieval and model calls. An LLM call extracts retrieval cues, facets, and temporal intent. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
-2. **Lexical search**: FTS5 or PostgreSQL full-text search retrieves up to `AML_CANDIDATE_LIMIT` candidates using BM25 ranking. Single-character CJK queries remain searchable; SQLite also checks older source text within the same user when its previous index lacks the character.
-3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Vectors are filtered by exact user, embedding model, and dimension.
+1. **Query analysis**: long queries are accepted. Chat analysis and reranking use a beginning-and-end excerpt of 16,000 characters by default; `AML_QUERY_MODEL_MAX_CHARS` can raise this without a code-level ceiling. An LLM call extracts retrieval cues, facets, and temporal intent. In `off` or `dev_mock` modes, lexical features alone drive retrieval.
+2. **Lexical search**: up to 160 selected terms from across the full query drive FTS5 or PostgreSQL full-text search, retrieving up to `AML_CANDIDATE_LIMIT` candidates using BM25 ranking. This bound limits database query size while prioritizing the final question and distinctive terms from other positions. Single-character CJK queries remain searchable; SQLite also checks older source text within the same user when its previous index lacks the character.
+3. **Vector search**: the full query is embedded in chunks for `text-embedding-v4` and compared against stored vectors using cosine similarity. Vectors are filtered by exact user, embedding model, and dimension.
 4. **Fusion**: candidates from both channels are merged with `1 / (60 + rank)` scoring. A lexical-overlap filter suppresses vector-only candidates that share no meaningful terms with the query.
-5. **Window expansion**: matched candidates expand to adjacent turns in the same session using source-order keys.
+5. **Window expansion**: matched candidates expand to adjacent turns in the same session using source-order keys. The service fetches output windows for at most `min(top_k, AML_MAX_OUTPUT_ITEMS)` anchors, so a request for one result does not load windows for one hundred.
 6. **Ranking**: a weighted combination of term coverage (0.40), fused-rank order (0.16), expanded coverage (0.12), option matches (0.10), phrase bonus (0.06), and temporal intent (up to 0.16) produces the rule order. For non-temporal queries, a successful reranker call supplies the final ordering scores. The `qwen3.7-text-rerank` call takes at most 500 top rule-ranked candidates; any remainder stays after them in rule order.
 7. **Packing**: evidence windows are packed into a token budget with source deduplication. A returned source ID identifies a source included in its evidence window; unknown packed source IDs are skipped rather than failing the request.
 
 ### 4.3 Token budgeting
 
-The output budget defaults to 8,000 tokens with a maximum of 24 windows. Token estimation counts CJK characters as one token each and other characters as one quarter token. A single oversized source is truncated within budget rather than dropped, preserving partial evidence for the downstream agent.
+The output budget defaults to approximately 32,000 tokens with a maximum of 100 windows, also bounded by the requested `top_k`. This is a character-based estimate: CJK characters count as one token each and other characters as one quarter token. A single oversized source is truncated within budget rather than dropped, preserving partial evidence for the downstream agent.
 
 ## 5. Integrity Guarantees
 
@@ -163,8 +163,9 @@ Local end-to-end verification with 24 concurrent synchronous Add calls completed
 | `RERANK_API_KEY` | falls back to embedding key | Optional separate reranker credential |
 | `AML_TIMEOUT_SECONDS` | `90` | Upstream timeout |
 | `AML_CANDIDATE_LIMIT` | `300` | Candidate cap before ranking |
-| `AML_MAX_OUTPUT_TOKENS` | `8000` | Evidence token budget |
-| `AML_MAX_OUTPUT_ITEMS` | `24` | Maximum returned evidence windows |
+| `AML_QUERY_MODEL_MAX_CHARS` | `16000` | Chat analysis and rerank query excerpt length; configurable without a code-level ceiling |
+| `AML_MAX_OUTPUT_TOKENS` | `32000` | Approximate evidence token budget |
+| `AML_MAX_OUTPUT_ITEMS` | `100` | Maximum returned evidence windows, also bounded by `top_k` |
 | `AML_VECTOR_MIN_SIMILARITY` | `0.35` | Minimum vector similarity for vector-only candidates |
 | `AML_VECTOR_ONLY_MIN_SIMILARITY` | `0.65` | Stricter threshold when lexical retrieval has no candidates |
 | `AML_SEARCH_CONCURRENCY` | `32` | Maximum in-process Search operations |

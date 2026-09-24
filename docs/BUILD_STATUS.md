@@ -23,7 +23,7 @@ The linked competition page states:
 | PandaStack deployment | Prepared | App start command uses `$PORT`; see `deploy/PandaStack.md`. |
 | Add/Search API | Complete | Synchronous contracts, aliases, validation, idempotency, and conflict handling. |
 | Request validation | Complete | Required fields, field types, nonempty messages and query, roles, timestamps, and `top_k` are validated; indexed `request_id` and `user_id` are capped at 512 characters. Query and options lengths and Add message count have no application-level maximum. |
-| Long-query handling | Complete | Search accepts long queries; model calls and retrieval use up to 8,000 characters from the beginning and end. |
+| Long-query handling | Complete | Search accepts long queries; lexical retrieval selects terms across the full query and chunked `text-embedding-v4` processes every chunk, while chat analysis and reranking use a configurable beginning-and-end excerpt. |
 | User isolation | Complete | Exact `user_id` filtering for lexical, vector, and neighbor retrieval. |
 | Persistence | Complete | SQLite WAL storage with request deduplication and restart tests. |
 | Retry efficiency | Complete | Identical Add retries return before model or embedding calls. |

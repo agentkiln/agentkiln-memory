@@ -16,7 +16,7 @@ The repository also includes Docker deployment files, a Caddy HTTPS example, Pan
 - Add validates required fields and rejects unsupported extra fields.
 - Search caps `top_k` at 100 and returns a `data` array.
 - Indexed `request_id` and `user_id` values are capped at 512 characters to limit PostgreSQL index key size. Add has no application-level `session_id` length or message-count maximum; Search accepts long queries and options without application-level length or count maximums.
-- Long Search queries use up to 8,000 characters from the beginning and end for retrieval and model calls.
+- Long Search queries contribute terms from across the full text to lexical retrieval and use chunked `text-embedding-v4` embedding; chat analysis and reranking use a configurable beginning-and-end excerpt (16,000 characters by default).
 - Source records are isolated by exact `user_id`.
 - Memories persist across process restart.
 - Request retries are idempotent; conflicting payloads return HTTP 409.
@@ -27,7 +27,7 @@ The repository also includes Docker deployment files, a Caddy HTTPS example, Pan
 - `qwen3.7-text-rerank` uses the native DashScope request and response format, with at most 500 rule-ranked documents per call; successful scores order non-temporal evidence, while earliest/latest queries retain time-aware ordering.
 - Packed evidence IDs correspond to a source contained in the returned window.
 - Long `text-embedding-v4` inputs and Add annotation requests are split into bounded model calls while source text stays complete in storage.
-- PostgreSQL neighbor windows follow source chunk order, and legacy Chinese single-character fallback terms are preserved within the query bound.
+- PostgreSQL neighbor windows follow source chunk order, and legacy Chinese single-character fallback terms remain searchable in long queries.
 - Oversized Chinese evidence is truncated to the configured output budget instead of being dropped.
 - Deployment and operational checks are included.
 

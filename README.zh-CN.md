@@ -209,7 +209,7 @@ python scripts/privacy_scan.py --root .
 }
 ```
 
-- `query`：非空白搜索文本；长查询可以提交，模型调用和检索使用首尾合计最多 8000 字符
+- `query`：非空白搜索文本；长查询可以提交。词法检索从完整查询中选择检索词，`text-embedding-v4` 会逐片嵌入完整查询；聊天模型的查询分析和重排序使用可配置的首尾摘录。
 - `options`：可选的候选项，用于选项匹配打分
 - `user_id`：严格隔离边界，最多 512 字符，以限制 PostgreSQL 索引键大小
 - `top_k`：1 到 100，返回证据窗口的最大数量
@@ -253,7 +253,7 @@ python scripts/privacy_scan.py --root .
 
 2. **词法搜索**：SQLite FTS5 或 PostgreSQL 全文搜索，使用 BM25 排序、Unicode 规范化、Porter 分词和包含单字的中文词条。SQLite 对旧索引写入的记录按用户范围补查单字内容。
 
-3. **向量搜索**：查询嵌入后与存储向量比较余弦相似度，只考虑相同嵌入模型和相同维度的向量。写入时每次最多发送 10 条文本，符合 `text-embedding-v4` 的批量限制。
+3. **向量搜索**：查询嵌入后与存储向量比较余弦相似度，只考虑相同嵌入模型和相同维度的向量。较长的 `text-embedding-v4` 输入会分片嵌入，写入时每批最多发送 10 条文本。
 
 4. **倒数排序融合**：两个候选列表按 `1 / (60 + rank)` 评分合并，然后按最小相似度阈值过滤。
 
@@ -279,8 +279,9 @@ python scripts/privacy_scan.py --root .
 | `RERANK_API_KEY` | 回退到嵌入服务密钥 | 可选的独立重排序凭据 |
 | `AML_TIMEOUT_SECONDS` | `90` | 上游超时 |
 | `AML_CANDIDATE_LIMIT` | `300` | 每个检索通道在融合前的候选数量上限 |
-| `AML_MAX_OUTPUT_TOKENS` | `8000` | 证据 token 预算 |
-| `AML_MAX_OUTPUT_ITEMS` | `24` | 返回证据窗口最大数量 |
+| `AML_QUERY_MODEL_MAX_CHARS` | `16000` | 聊天模型查询分析和重排序使用的摘录长度，可配置，代码未设最大值 |
+| `AML_MAX_OUTPUT_TOKENS` | `32000` | 估算的证据 token 预算 |
+| `AML_MAX_OUTPUT_ITEMS` | `100` | 返回证据窗口最大数量，同时受 `top_k` 约束 |
 | `AML_VECTOR_MIN_SIMILARITY` | `0.35` | 仅向量候选的最小相似度 |
 | `AML_VECTOR_ONLY_MIN_SIMILARITY` | `0.65` | 词法无候选时更严格的阈值 |
 | `AML_SEARCH_CONCURRENCY` | `32` | 进程内 Search 最大并发 |

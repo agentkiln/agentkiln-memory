@@ -217,7 +217,7 @@ Unit and integration tests cover API contract, user isolation, persistence, conc
 }
 ```
 
-- `query`: nonblank search text; long queries are accepted, with the first and last 8,000 characters in total used for retrieval and model calls
+- `query`: nonblank search text; long queries are accepted. Lexical retrieval selects terms across the full query and `text-embedding-v4` embeds every chunk; chat query analysis and reranking use a configurable excerpt from its beginning and end.
 - `options`: optional candidate options for option-match scoring
 - `user_id`: strict isolation boundary, at most 512 characters to limit PostgreSQL index key size
 - `top_k`: 1 to 100, maximum evidence windows returned
@@ -261,7 +261,7 @@ The search pipeline processes a query through five stages:
 
 2. **Lexical search**: SQLite FTS5 or PostgreSQL full-text search retrieves candidates using BM25 ranking, Unicode normalization, Porter tokenization, and CJK terms including single characters. SQLite also searches the scoped source text for single-character queries against records written with the older index format.
 
-3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Only vectors from the same embedding model and dimension are considered. Embedding writes are split into batches of at most 10 texts for `text-embedding-v4` compatibility.
+3. **Vector search**: the query is embedded and compared against stored vectors using cosine similarity. Only vectors from the same embedding model and dimension are considered. Long `text-embedding-v4` inputs are embedded in chunks; embedding writes are batched at up to 10 texts.
 
 4. **Reciprocal rank fusion**: both candidate lists are merged using `1 / (60 + rank)` scoring, then filtered by a minimum similarity threshold.
 
@@ -287,8 +287,9 @@ The search pipeline processes a query through five stages:
 | `RERANK_API_KEY` | falls back to the embedding API key | Optional separate reranker credential |
 | `AML_TIMEOUT_SECONDS` | `90` | Upstream timeout |
 | `AML_CANDIDATE_LIMIT` | `300` | Candidate cap per retrieval channel before fusion |
-| `AML_MAX_OUTPUT_TOKENS` | `8000` | Evidence token budget |
-| `AML_MAX_OUTPUT_ITEMS` | `24` | Maximum returned evidence windows |
+| `AML_QUERY_MODEL_MAX_CHARS` | `16000` | Maximum excerpt length for chat query analysis and reranking; configurable without a code-level ceiling |
+| `AML_MAX_OUTPUT_TOKENS` | `32000` | Approximate evidence token budget |
+| `AML_MAX_OUTPUT_ITEMS` | `100` | Maximum returned evidence windows, also bounded by `top_k` |
 | `AML_VECTOR_MIN_SIMILARITY` | `0.35` | Minimum vector similarity for vector-only candidates |
 | `AML_VECTOR_ONLY_MIN_SIMILARITY` | `0.65` | Stricter threshold when lexical retrieval has no candidates |
 | `AML_SEARCH_CONCURRENCY` | `32` | Maximum in-process Search operations |

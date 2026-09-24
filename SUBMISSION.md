@@ -31,11 +31,11 @@ AgentKiln Memory is an evidence-only long-term memory service. It persists sourc
 - LLM: `gpt-4o-mini` (via OpenAI-compatible endpoint)
 - Embedding model: configured through `OPENAI_EMBEDDING_MODEL`
 - Optional reranker: configured through `RERANK_MODEL`; falls back to rule-based ranking when unavailable
-- Search evidence budget: 8,000 tokens by default; 24 returned windows by default.
+- Search evidence budget: approximately 32,000 tokens by default; at most 100 returned windows by default, subject to `top_k`.
 - In-process concurrency limits: Add 16, Search 32.
 - Add returns only after the request is durably stored and immediately searchable.
 - Long Add messages are split for model calls while the original source is stored whole; larger requests may require multiple upstream calls.
-- Long Search queries are accepted; retrieval and model calls use up to 8,000 characters from the beginning and end of the query.
+- Long Search queries are accepted. Lexical retrieval selects terms across the full query and `text-embedding-v4` embeds every chunk; chat query analysis and reranking use a beginning-and-end excerpt of 16,000 characters by default, configurable with `AML_QUERY_MODEL_MAX_CHARS`.
 - Production model endpoints require HTTPS, and malformed model vectors cannot be stored.
 
 ## Capacity declaration
