@@ -16,7 +16,7 @@ The linked competition page states:
 | Area | Status | Notes |
 |---|---|---|
 | Repository | Complete | AgentKiln Memory project sources and deployment files. |
-| Database backends | Complete | SQLite for local development; PostgreSQL on the PandaStack branch. |
+| Database backends | Complete | SQLite for local development; PostgreSQL for PandaStack production. |
 | PostgreSQL schema | Complete | `scripts/init_postgres.py` creates tables with GIN full-text indexes. |
 | PostgreSQL CJK search | Complete | Untokenized CJK text falls back to substring matching; ASCII keeps tsquery. |
 | PostgreSQL verification | Complete | `scripts/verify_postgres.py` ran Add/Search and CJK retrieval against PandaStack PostgreSQL. |

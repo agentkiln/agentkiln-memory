@@ -14,7 +14,7 @@ Complete the personal contact fields before submitting. Do not include secrets i
 
 ## Short method description
 
-AgentKiln Memory is an evidence-only long-term memory service. It persists source messages under a strict `user_id` boundary, indexes them with SQLite FTS5 and PostgreSQL GIN full-text search, adds a vector retrieval channel with configured embeddings, fuses candidates by reciprocal rank, expands adjacent source turns within the same session, and returns token-bounded verbatim evidence windows. Temporal intent scoring supports latest and earliest questions without generating final answers. An optional external reranker can reorder candidates with automatic fallback to rule-based ranking. Add is synchronous and idempotent; Search never generates the final answer.
+AgentKiln Memory is an evidence-only long-term memory service. It persists source messages under a strict `user_id` boundary, indexes them with SQLite FTS5 and PostgreSQL GIN full-text search, adds a vector retrieval channel with configured embeddings, fuses candidates by reciprocal rank, expands adjacent source turns within the same session, and returns token-bounded source evidence windows. A source that exceeds the evidence budget is truncated in the response while its stored text stays complete. Temporal intent scoring supports latest and earliest questions without generating final answers. An optional external reranker can reorder candidates with automatic fallback to rule-based ranking. Add is synchronous and idempotent; Search never generates the final answer.
 
 ## Public endpoints
 
@@ -34,6 +34,7 @@ AgentKiln Memory is an evidence-only long-term memory service. It persists sourc
 - Search evidence budget: 8,000 tokens by default; 24 returned windows by default.
 - In-process concurrency limits: Add 16, Search 32.
 - Add returns only after the request is durably stored and immediately searchable.
+- Long Add messages are split for model calls while the original source is stored whole; larger requests may require multiple upstream calls.
 - Production model endpoints require HTTPS, and malformed model vectors cannot be stored.
 
 ## Capacity declaration

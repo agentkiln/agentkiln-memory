@@ -24,6 +24,9 @@ The repository also includes Docker deployment files, a Caddy HTTPS example, Pan
 - `text-embedding-v4` calls split into batches of at most 10, with response indexes and dimensions checked before persistence.
 - `qwen3.7-text-rerank` uses the native DashScope request and response format, with at most 500 rule-ranked documents per call; successful scores order non-temporal evidence, while earliest/latest queries retain time-aware ordering.
 - Packed evidence IDs correspond to a source contained in the returned window.
+- Long `text-embedding-v4` inputs and Add annotation requests are split into bounded model calls while source text stays complete in storage.
+- PostgreSQL neighbor windows follow source chunk order, and legacy Chinese single-character fallback terms are preserved within the query bound.
+- Oversized Chinese evidence is truncated to the configured output budget instead of being dropped.
 - Deployment and operational checks are included.
 
 ## Verified locally
@@ -50,7 +53,7 @@ Command:
 python scripts/local_verify.py --port 8123 --concurrency 24
 ```
 
-Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.35 seconds, 13 returned evidence windows, and measured Search latency of about 0.110 seconds in `dev_mock` mode.
+Result: local end-to-end verification passed with 24 concurrent synchronous Add calls completing in about 0.34-0.38 seconds. Recent runs returned 12-13 evidence windows, with measured Search latency around 0.106-0.111 seconds in `dev_mock` mode.
 
 ## Verified on the prior PandaStack deployment
 
@@ -71,6 +74,8 @@ These checks predate the current code changes. The updated deployment has not be
 
 - Platform-issued Eval Key and public Smoke.
 - PandaStack deployment and remote verification of the current code changes.
+- Docker image build and container restart verification on a machine with a running Docker daemon.
+- Search latency and memory use against a PostgreSQL dataset at expected competition scale; the current vector path reads all of a user's vectors for similarity scoring.
 - Official score.
 
 Do not report planned model use or local tests as an official competition result.

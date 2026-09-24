@@ -236,7 +236,9 @@ Unit and integration tests cover API contract, user isolation, persistence, conc
 }
 ```
 
-Each item is a verbatim source message wrapped in a session window header. The system never rewrites, summarizes, or generates content.
+Each item contains source text wrapped in a session window header. When a single source exceeds the configured evidence budget, the returned text is truncated with `...`; the stored source remains complete. The system never summarizes or generates answers.
+
+In `competition` mode, long Add messages are split only for model calls. The stored source remains whole, and a large Add request may require several upstream calls.
 
 ### Authentication
 
