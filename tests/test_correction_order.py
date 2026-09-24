@@ -84,3 +84,89 @@ def test_untimed_corrections_in_one_request_use_message_order() -> None:
     newer = _row("newer", "Correction launch code beta", created_at, ordinal=1)
 
     assert MemoryService._suppress_superseded([newer, older]) == [newer]
+
+
+def test_correction_preserves_unrelated_fact_in_older_message() -> None:
+    older = _row(
+        "older",
+        "Correction launch code alpha. Backup contact Alice.",
+        "2026-01-01T00:00:00+00:00",
+    )
+    newer = _row(
+        "newer", "Correction launch code beta.", "2026-01-02T00:00:00+00:00"
+    )
+
+    assert MemoryService._suppress_superseded([newer, older]) == [newer, older]
+
+
+def test_correction_preserves_older_fact_requested_by_query() -> None:
+    older = _row(
+        "older",
+        "Correction launch code alpha and backup contact Alice",
+        "2026-01-01T00:00:00+00:00",
+    )
+    newer = _row(
+        "newer", "Correction launch code beta", "2026-01-02T00:00:00+00:00"
+    )
+
+    assert MemoryService._suppress_superseded(
+        [newer, older], query_terms=["backup", "contact"]
+    ) == [newer, older]
+
+
+def test_mentioning_old_value_does_not_restore_superseded_single_fact() -> None:
+    older = _row("older", "Correction launch code alpha", "2026-01-01T00:00:00+00:00")
+    newer = _row("newer", "Correction launch code beta", "2026-01-02T00:00:00+00:00")
+
+    assert MemoryService._suppress_superseded(
+        [newer, older], query_terms=["alpha", "launch", "code"]
+    ) == [newer]
+
+
+def test_mixed_old_message_is_suppressed_when_query_asks_corrected_fact() -> None:
+    older = _row(
+        "older",
+        "Correction launch code alpha. Backup contact Alice.",
+        "2026-01-01T00:00:00+00:00",
+    )
+    newer = _row("newer", "Correction launch code beta", "2026-01-02T00:00:00+00:00")
+
+    assert MemoryService._suppress_superseded(
+        [newer, older], query_terms=["launch", "code"]
+    ) == [newer]
+
+
+def test_decimal_point_does_not_make_single_fact_look_independent() -> None:
+    older = _row("older", "Correction budget is $1.5 million", "2026-01-01T00:00:00+00:00")
+    newer = _row("newer", "Correction budget is $2 million", "2026-01-02T00:00:00+00:00")
+
+    assert MemoryService._suppress_superseded([newer, older]) == [newer]
+
+
+def test_mixed_message_keeps_other_fact_without_restoring_old_value(tmp_path: Path) -> None:
+    client = TestClient(create_app(_settings(tmp_path)))
+    for request_id, session_id, content in (
+        ("mixed-old", "session-old", "Correction launch code alpha. Backup contact Alice."),
+        ("mixed-new", "session-new", "Correction launch code beta."),
+    ):
+        assert client.post(
+            "/add",
+            json={
+                "request_id": request_id,
+                "user_id": "mixed-user",
+                "session_id": session_id,
+                "messages": [{"role": "user", "content": content}],
+            },
+        ).status_code == 200
+
+    backup = client.post(
+        "/search",
+        json={"user_id": "mixed-user", "query": "Who is the backup contact?", "top_k": 1},
+    ).json()["data"]
+    current_code = client.post(
+        "/search",
+        json={"user_id": "mixed-user", "query": "Is alpha still the launch code?", "top_k": 1},
+    ).json()["data"]
+
+    assert backup and backup[0]["id"] == memory_id_for("mixed-user", "mixed-old", 0)
+    assert current_code and current_code[0]["id"] == memory_id_for("mixed-user", "mixed-new", 0)

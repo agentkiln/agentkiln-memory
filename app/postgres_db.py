@@ -201,6 +201,41 @@ class PostgresMemoryDatabase:
             for row in rows
         ]
 
+    def date_search(
+        self, user_id: str, start_ms: int, end_ms: int, limit: int
+    ) -> list[MemoryRow]:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT m.id, m.user_id, m.session_id, m.request_id, m.ordinal,
+                           m.role, m.content, m.occurred_at, m.created_at, m.search_text
+                    FROM memories AS m
+                    WHERE m.user_id = %s AND m.occurred_at >= %s AND m.occurred_at < %s
+                    ORDER BY m.occurred_at DESC, m.id DESC
+                    LIMIT %s
+                    """,
+                    (user_id, start_ms, end_ms, limit),
+                )
+                rows = cursor.fetchall()
+        return [
+            MemoryRow(
+                id=row[0],
+                row_id=0,
+                user_id=row[1],
+                session_id=row[2],
+                request_id=row[3],
+                ordinal=int(row[4]),
+                role=row[5],
+                content=row[6],
+                occurred_at=row[7],
+                created_at=row[8],
+                search_text=row[9],
+                fts_rank=1_000.0,
+            )
+            for row in rows
+        ]
+
     def vector_search(
         self,
         user_id: str,

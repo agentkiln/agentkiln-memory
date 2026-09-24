@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import datetime, timezone
 
 
 WORD_RE = re.compile(r"[A-Za-z0-9_]+(?:[-'][A-Za-z0-9_]+)*")
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
+EXPLICIT_DATE_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(?:(\d{4})-(\d{1,2})-(\d{1,2})|"
+    r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日)(?![A-Za-z0-9_-])"
+)
 
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "did", "do", "does",
@@ -156,6 +161,22 @@ def temporal_intent(query: str) -> str:
     if _contains_marker(normalized, LATEST_MARKERS):
         return "latest"
     return "none"
+
+
+def parse_explicit_date_range_ms(query: str) -> tuple[int, int] | None:
+    """Return UTC millisecond bounds for one unambiguous calendar day in a query."""
+    matches = list(EXPLICIT_DATE_RE.finditer(unicodedata.normalize("NFKC", query)))
+    if len(matches) != 1:
+        return None
+    parts = matches[0].groups()
+    year, month, day = (parts[:3] if parts[0] is not None else parts[3:])
+    try:
+        start = datetime(int(year), int(month), int(day), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    start_ms = (start - epoch).days * 86_400_000
+    return start_ms, start_ms + 86_400_000
 
 
 def has_update_marker(value: str) -> bool:

@@ -349,6 +349,23 @@ class MemoryDatabase:
             ).fetchall()
         return [MemoryRow(**dict(row)) for row in rows]
 
+    def date_search(
+        self, user_id: str, start_ms: int, end_ms: int, limit: int
+    ) -> list[MemoryRow]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, rowid AS row_id, user_id, session_id, request_id, ordinal, role,
+                       content, occurred_at, created_at, search_text, 1000.0 AS fts_rank
+                FROM memories
+                WHERE user_id = ? AND occurred_at >= ? AND occurred_at < ?
+                ORDER BY occurred_at DESC, rowid DESC
+                LIMIT ?
+                """,
+                (user_id, start_ms, end_ms, limit),
+            ).fetchall()
+        return [MemoryRow(**dict(row)) for row in rows]
+
     def neighbors(self, user_id: str, seed_ids: list[str], radius: int = 1) -> list[tuple[MemoryRow, int, int]]:
         if not seed_ids or radius < 1:
             return []

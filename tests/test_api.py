@@ -216,6 +216,48 @@ def test_rerank_changes_search_output_order(tmp_path: Path) -> None:
     assert preferred in reranked.json()["data"][0]["content"]
 
 
+def test_date_wording_without_timestamp_keeps_rerank_available(tmp_path: Path) -> None:
+    writer = TestClient(create_app(settings(tmp_path)))
+    assert writer.post(
+        "/add",
+        json={
+            "request_id": "undated-event",
+            "user_id": "undated-user",
+            "session_id": "undated-session",
+            "messages": [{"role": "user", "content": "The launch code is alpha."}],
+        },
+    ).status_code == 200
+    configured = replace(
+        settings(tmp_path),
+        llm_mode="competition",
+        openai_api_key="test-key",
+        embedding_api_key="test-key",
+        rerank_model="qwen3.7-text-rerank",
+        rerank_api_key="test-key",
+        rerank_base_url="https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+    )
+    with (
+        patch("app.service.MemoryLLM.analyze_query", return_value=QueryPlan([], [], "none")),
+        patch(
+            "app.service.MemoryLLM.embed_texts",
+            side_effect=lambda texts: [MemoryLLM._mock_embedding(text) for text in texts],
+        ),
+        patch("app.service.MemoryLLM.rerank", return_value=[0.8]) as rerank,
+    ):
+        response = TestClient(create_app(configured)).post(
+            "/search",
+            json={
+                "query": "What happened on 2024-01-01 to the launch code?",
+                "user_id": "undated-user",
+                "top_k": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["data"]
+    rerank.assert_called_once()
+
+
 def test_rerank_limits_documents_before_call(tmp_path: Path) -> None:
     configured = replace(
         settings(tmp_path),
@@ -947,6 +989,43 @@ def test_implicit_recency_prefers_newer_state_when_dates_are_available(tmp_path:
         json={"query": "Who is my backup contact?", "user_id": "recency-user", "top_k": 1},
     ).json()["data"][0]
     assert "Bob" in result["content"]
+
+
+def test_explicit_history_summary_includes_another_session(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path)))
+    assert client.post(
+        "/add",
+        json={
+            "request_id": "history-a",
+            "user_id": "history-summary-user",
+            "session_id": "session-a",
+            "messages": [
+                {"role": "user", "content": f"Project history milestone alpha {index}."}
+                for index in range(5)
+            ],
+        },
+    ).status_code == 200
+    assert client.post(
+        "/add",
+        json={
+            "request_id": "history-b",
+            "user_id": "history-summary-user",
+            "session_id": "session-b",
+            "messages": [{"role": "user", "content": "Project history milestone beta."}],
+        },
+    ).status_code == 200
+
+    result = client.post(
+        "/search",
+        json={
+            "user_id": "history-summary-user",
+            "query": "Summarize the entire project history",
+            "top_k": 2,
+        },
+    )
+
+    assert result.status_code == 200
+    assert any("milestone beta" in item["content"] for item in result.json()["data"])
 
 
 def test_vector_index_filter_columns_exist(tmp_path: Path) -> None:

@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import threading
 from collections import defaultdict
 
 from .config import Settings
 from .db import MemoryDatabase, MemoryRow
+from .diversity import select_diverse_evidence
 from .llm import MemoryLLM
 from .pack import pack_windows
 from .postgres_db import PostgresMemoryDatabase
@@ -18,6 +20,7 @@ from .text import (
     has_update_marker,
     lexical_overlap,
     lexical_terms,
+    parse_explicit_date_range_ms,
     phrase_bonus,
     semantic_terms,
     temporal_intent,
@@ -29,6 +32,29 @@ SEARCH_QUERY_PRIORITY_CHARS = 512
 SEARCH_QUERY_LEXICAL_TERMS = 160
 SEARCH_QUERY_PRIORITY_TERMS = 80
 logger = logging.getLogger("uvicorn.error")
+EVENT_DAY_CUE_RE = re.compile(r"\b(?:on|at|during|as of)\s*$|[在于]\s*$", re.IGNORECASE)
+EVENT_DAY_AFTER_RE = re.compile(r"^\s*(?:当天|当日|那天|这天)")
+DATE_TEXT_RE = re.compile(r"\d{4}-(?:\d{1,2})-(?:\d{1,2})|\d{4}年\s*\d{1,2}月\s*\d{1,2}日")
+DATE_ATTRIBUTE_RE = re.compile(
+    r"\b(?:due|deadline|scheduled|appointment|expires?|expiry|expiration)\b"
+    r"|到期|截止|期限|预约|预定",
+    re.IGNORECASE,
+)
+DATE_FIRST_EVENT_RE = re.compile(r"^\s*(?:我|他|她|我们|他们).{0,40}(?:住|去|到|在哪里|发生|做了什么)")
+
+
+def _event_day_range(query: str) -> tuple[int, int] | None:
+    date_range = parse_explicit_date_range_ms(query)
+    if date_range is None or DATE_ATTRIBUTE_RE.search(query):
+        return None
+    match = DATE_TEXT_RE.search(query)
+    if match is None:
+        return None
+    if EVENT_DAY_CUE_RE.search(query[: match.start()]) or EVENT_DAY_AFTER_RE.match(query[match.end() :]):
+        return date_range
+    if match.start() == 0 and DATE_FIRST_EVENT_RE.match(query[match.end() :]):
+        return date_range
+    return None
 
 
 def _bounded_search_query(query: str, max_chars: int) -> str:
@@ -141,6 +167,7 @@ class MemoryService:
             query_parts = [search_query] + plan.terms + plan.facets + semantic_terms(search_query, limit=96)
             query_terms = lexical_terms(" ".join(query_parts), limit=SEARCH_QUERY_LEXICAL_TERMS)
         query = fts_query(query_terms)
+        date_range = _event_day_range(request.query)
         lexical_rows = self.database.lexical_search(
             request.user_id,
             query,
@@ -158,23 +185,35 @@ class MemoryService:
                 else self.settings.vector_only_min_similarity
             ),
         )
-        candidates = self._fuse(lexical_rows, vector_rows)
+        date_rows = (
+            self.database.date_search(
+                request.user_id, date_range[0], date_range[1], self.settings.candidate_limit
+            )
+            if date_range is not None
+            else []
+        )
+        if not date_rows:
+            date_range = None
+        candidates = self._fuse(lexical_rows, vector_rows, date_rows)
         if lexical_rows:
             allowed = {row.id for row in lexical_rows}
+            allowed.update(row.id for row in date_rows)
             allowed.update(
                 row.id
                 for row in vector_rows
                 if lexical_overlap(query_terms, row.content, row.search_text)
             )
             candidates = [row for row in candidates if row.id in allowed]
-        elif not vector_rows:
+        elif not vector_rows and not date_rows:
             return []
         candidates = self._expand_neighbors(request.user_id, candidates)
         if not candidates:
             return []
         intent = plan.intent if plan.intent != "none" else temporal_intent(request.query)
-        if intent != "earliest":
-            candidates = self._suppress_superseded(candidates)
+        if intent != "earliest" and date_range is None:
+            candidates = self._suppress_superseded(
+                candidates, query_terms=lexical_terms(request.query, limit=None)
+            )
         ordered = self._rank(
             search_query,
             request.options or [],
@@ -182,8 +221,9 @@ class MemoryService:
             intent,
             query_terms,
             plan.terms + plan.facets,
+            date_range=date_range,
         )
-        rerank_enabled = self.settings.llm_mode == "competition" and intent == "none" and bool(
+        rerank_enabled = self.settings.llm_mode == "competition" and intent == "none" and date_range is None and bool(
             self.settings.rerank_model and self.settings.rerank_api_key
         )
         rerank_pool = (
@@ -193,7 +233,7 @@ class MemoryService:
         )
         rerank_scores = (
             self.llm.rerank(search_query, [row.content for _score, row in rerank_pool])
-            if intent == "none"
+            if intent == "none" and date_range is None
             else None
         )
         if rerank_scores is not None and len(rerank_scores) == len(rerank_pool):
@@ -207,9 +247,13 @@ class MemoryService:
             ]
         else:
             rerank_scores = None
-        windows = self._windows(
-            request.user_id, ordered[: min(request.top_k, self.settings.max_output_items)]
+        selected = select_diverse_evidence(
+            request.query,
+            ordered,
+            min(request.top_k, self.settings.max_output_items),
+            intent=intent,
         )
+        windows = self._windows(request.user_id, selected)
         packed = pack_windows(
             windows,
             top_k=request.top_k,
@@ -238,14 +282,21 @@ class MemoryService:
             self._cache.pop(next(iter(self._cache)))
 
     @staticmethod
-    def _suppress_superseded(candidates: list[MemoryRow]) -> list[MemoryRow]:
+    def _suppress_superseded(
+        candidates: list[MemoryRow], query_terms: list[str] | None = None
+    ) -> list[MemoryRow]:
         """Demote older memories that a later correction in the same concept clearly supersedes."""
         corrections = [row for row in candidates if has_update_marker(row.content)]
         if not corrections:
             return candidates
+        term_sets = {
+            row.id: set(lexical_terms(row.content, limit=96)) for row in candidates
+        }
+        requested_terms = set(query_terms) if query_terms is not None else None
+        claim_sets: dict[str, list[set[str]]] = {}
         superseded_ids: set[str] = set()
         for newer in corrections:
-            newer_terms = set(lexical_terms(newer.content, limit=96))
+            newer_terms = term_sets[newer.id]
             if not newer_terms:
                 continue
             for older in candidates:
@@ -253,9 +304,32 @@ class MemoryService:
                     continue
                 if not MemoryService._is_later(newer, older):
                     continue
-                older_terms = set(lexical_terms(older.content, limit=96))
-                if older_terms and len(newer_terms & older_terms) / len(newer_terms) >= 0.6:
-                    superseded_ids.add(older.id)
+                older_terms = term_sets[older.id]
+                if not older_terms or len(newer_terms & older_terms) / len(newer_terms) < 0.6:
+                    continue
+                clauses = claim_sets.get(older.id)
+                if clauses is None:
+                    clauses = [
+                        set(lexical_terms(part, limit=96))
+                        for part in re.split(
+                            r"(?<=[.!?])\s+|[。！？;；]+|\b(?:and|also)\b|以及|另外|同时",
+                            older.content,
+                            flags=re.IGNORECASE,
+                        )
+                        if part.strip()
+                    ]
+                    claim_sets[older.id] = clauses
+                independent = [
+                    terms
+                    for terms in clauses
+                    if len(terms) >= 2 and len(terms & newer_terms) / len(terms) < 0.4
+                ]
+                if independent and (
+                    requested_terms is None
+                    or any(requested_terms & terms for terms in independent)
+                ):
+                    continue
+                superseded_ids.add(older.id)
         if not superseded_ids:
             return candidates
         return [row for row in candidates if row.id not in superseded_ids]
@@ -274,10 +348,10 @@ class MemoryService:
         return False
 
     @staticmethod
-    def _fuse(lexical: list[MemoryRow], vector: list[MemoryRow]) -> list[MemoryRow]:
+    def _fuse(*ranked_lists: list[MemoryRow]) -> list[MemoryRow]:
         scores: dict[str, float] = defaultdict(float)
         rows: dict[str, MemoryRow] = {}
-        for ranked in (lexical, vector):
+        for ranked in ranked_lists:
             for index, row in enumerate(ranked):
                 rows.setdefault(row.id, row)
                 scores[row.id] += 1.0 / (60 + index + 1)
@@ -302,6 +376,7 @@ class MemoryService:
         intent: str,
         query_terms: list[str],
         expanded_terms: list[str],
+        date_range: tuple[int, int] | None = None,
     ) -> list[tuple[float, MemoryRow]]:
         terms = set(query_terms)
         expansion = set(lexical_terms(" ".join(expanded_terms), limit=128)) - terms
@@ -321,6 +396,12 @@ class MemoryService:
                     time_score = 0.16 * (1.0 - ratio)
             if intent == "latest" and has_update_marker(row.content):
                 time_score += 0.05
+            if (
+                date_range is not None
+                and row.occurred_at is not None
+                and date_range[0] <= row.occurred_at < date_range[1]
+            ):
+                time_score += 0.25
             score = (
                 0.40 * coverage(terms, values)
                 + 0.16 * (1.0 / (1.0 + index))
