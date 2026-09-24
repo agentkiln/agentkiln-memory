@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import logging
 import math
@@ -442,7 +443,14 @@ class MemoryLLM:
                     error_code,
                     request_id,
                 )
-            except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+            except (
+                http.client.IncompleteRead,
+                urllib.error.URLError,
+                TimeoutError,
+                OSError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
                 last_error = exc
                 if attempt == attempts - 1:
                     logger.error(

@@ -1,3 +1,4 @@
+import http.client
 import io
 import json
 from dataclasses import replace
@@ -65,6 +66,40 @@ def test_post_retries_transient_failure(tmp_path: Path) -> None:
 
     with patch("app.llm.urllib.request.urlopen", side_effect=fake_urlopen):
         result = llm._post("/embeddings", {"model": "x", "input": ["hello"]})
+    assert result["data"][0]["embedding"] == [1.0, 0.0]
+    assert calls == 2
+
+
+def test_post_retries_when_response_body_is_truncated(tmp_path: Path) -> None:
+    llm = MemoryLLM(settings(tmp_path))
+    calls = 0
+
+    class Response:
+        def __init__(self, truncated: bool):
+            self.truncated = truncated
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self) -> bytes:
+            if self.truncated:
+                raise http.client.IncompleteRead(b'{"data":', 12)
+            return b'{"data":[{"index":0,"embedding":[1.0,0.0]}]}'
+
+    def fake_urlopen(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return Response(truncated=calls == 1)
+
+    with (
+        patch("app.llm.urllib.request.urlopen", side_effect=fake_urlopen),
+        patch("app.llm.time.sleep"),
+    ):
+        result = llm._post("/embeddings", {"model": "text-embedding-v4", "input": ["hello"]})
+
     assert result["data"][0]["embedding"] == [1.0, 0.0]
     assert calls == 2
 
