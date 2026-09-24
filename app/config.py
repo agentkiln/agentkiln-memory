@@ -72,8 +72,7 @@ class Settings:
         if mode not in {"off", "dev_mock", "competition"}:
             raise ValueError("AML_LLM_MODE must be off, dev_mock, or competition")
         production = os.getenv("AML_PRODUCTION", "").strip().lower() in PRODUCTION_ENV_VALUES
-        allow_mock_deploy = os.getenv("AML_ALLOW_MOCK_DEPLOY", "").strip().lower() in PRODUCTION_ENV_VALUES
-        if production and mode != "competition" and not allow_mock_deploy:
+        if production and mode != "competition":
             raise ValueError("AML_PRODUCTION requires AML_LLM_MODE=competition")
         if production and not (os.getenv("AML_API_KEY") or "").strip():
             raise ValueError("AML_PRODUCTION requires AML_API_KEY")

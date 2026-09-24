@@ -114,3 +114,21 @@ def test_production_accepts_postgresql_database_url() -> None:
         assert Settings.from_env().database_url == (
             "postgresql://user:pass@db.example.com/memory?sslmode=require"
         )
+
+
+@pytest.mark.parametrize("mode", ["off", "dev_mock"])
+def test_production_rejects_mock_mode_even_with_legacy_override(mode: str) -> None:
+    with patch.dict(
+        os.environ,
+        {
+            "AML_PRODUCTION": "1",
+            "AML_ALLOW_MOCK_DEPLOY": "1",
+            "AML_LLM_MODE": mode,
+            "AML_API_KEY": "long-local-test-api-key",
+            "OPENAI_API_KEY": "chat-key",
+            "DATABASE_URL": "postgresql://user:pass@db.example.com/memory?sslmode=require",
+        },
+        clear=True,
+    ):
+        with pytest.raises(ValueError, match="AML_LLM_MODE=competition"):
+            Settings.from_env()
