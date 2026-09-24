@@ -1,9 +1,10 @@
 name: Deploy to PandaStack
 
 on:
-  push:
-    branches:
-      - master
+  # Automatic deploys on Git pushes are paused. Run this workflow manually.
+  # push:
+  #   branches:
+  #     - master
   workflow_dispatch:
 
 permissions:
