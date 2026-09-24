@@ -201,7 +201,7 @@ class MemoryService:
             for older in candidates:
                 if older.id == newer.id:
                     continue
-                if newer.occurred_at is not None and older.occurred_at is not None and older.occurred_at >= newer.occurred_at:
+                if not MemoryService._is_later(newer, older):
                     continue
                 older_terms = set(lexical_terms(older.content, limit=96))
                 if older_terms and len(newer_terms & older_terms) / len(newer_terms) >= 0.6:
@@ -209,6 +209,20 @@ class MemoryService:
         if not superseded_ids:
             return candidates
         return [row for row in candidates if row.id not in superseded_ids]
+
+    @staticmethod
+    def _is_later(newer: MemoryRow, older: MemoryRow) -> bool:
+        if newer.occurred_at is not None and older.occurred_at is not None:
+            if newer.occurred_at != older.occurred_at:
+                return newer.occurred_at > older.occurred_at
+        if newer.created_at != older.created_at:
+            return newer.created_at > older.created_at
+        if newer.request_id == older.request_id and newer.ordinal != older.ordinal:
+            return newer.ordinal > older.ordinal
+        if newer.row_id and older.row_id and newer.row_id != older.row_id:
+            return newer.row_id > older.row_id
+        return False
+
     @staticmethod
     def _fuse(lexical: list[MemoryRow], vector: list[MemoryRow]) -> list[MemoryRow]:
         scores: dict[str, float] = defaultdict(float)

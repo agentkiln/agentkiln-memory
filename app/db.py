@@ -12,7 +12,7 @@ from pathlib import Path
 from collections.abc import Iterator
 
 from .schemas import AddRequest
-from .text import lexical_terms
+from .text import CJK_RE, lexical_terms
 
 
 def memory_id_for(user_id: str, request_id: str, ordinal: int) -> str:
@@ -173,7 +173,11 @@ class MemoryDatabase:
             for ordinal, message in enumerate(request.messages):
                 memory_id = memory_id_for(request.user_id, request.request_id, ordinal)
                 search_text = " ".join(
-                    lexical_terms(f"{message.content}\n{annotations[ordinal]}", limit=384)
+                    lexical_terms(
+                        f"{message.content}\n{annotations[ordinal]}",
+                        limit=384,
+                        index_cjk_characters=True,
+                    )
                 )
                 connection.execute(
                     """
@@ -254,7 +258,42 @@ class MemoryDatabase:
                 """,
                 (query, user_id, limit),
             ).fetchall()
-        return [MemoryRow(**dict(row)) for row in rows]
+        output = [MemoryRow(**dict(row)) for row in rows]
+        single_cjk_term = next(
+            (
+                match.group(1)
+                for match in re.finditer(r'"([^"])"', query)
+                if CJK_RE.fullmatch(match.group(1))
+            ),
+            None,
+        )
+        if len(output) >= limit or single_cjk_term is None:
+            return output
+
+        # Older rows may lack this single character in search_text because the
+        # previous tokenizer indexed only the surrounding CJK word.
+        with self._connection() as connection:
+            fallback = connection.execute(
+                """
+                SELECT m.id, m.rowid AS row_id, m.user_id, m.session_id, m.request_id,
+                       m.ordinal, m.role, m.content, m.occurred_at, m.created_at,
+                       m.search_text, 1000.0 AS fts_rank
+                FROM memories AS m
+                WHERE m.user_id = ? AND instr(m.content, ?) > 0
+                ORDER BY m.occurred_at DESC, m.ordinal DESC, m.rowid DESC
+                LIMIT ?
+                """,
+                (user_id, single_cjk_term, limit + len(output)),
+            ).fetchall()
+        seen = {row.id for row in output}
+        for row in fallback:
+            memory = MemoryRow(**dict(row))
+            if memory.id not in seen:
+                output.append(memory)
+                seen.add(memory.id)
+            if len(output) >= limit:
+                break
+        return output
 
     def vector_search(
         self,

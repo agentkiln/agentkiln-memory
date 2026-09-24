@@ -89,7 +89,11 @@ class PostgresMemoryDatabase:
                         raise ValueError("embedding vectors must be finite and non-empty")
                     memory_id = memory_id_for(request.user_id, request.request_id, ordinal)
                     search_text = " ".join(
-                        lexical_terms(f"{message.content}\n{annotations[ordinal]}", limit=384)
+                        lexical_terms(
+                            f"{message.content}\n{annotations[ordinal]}",
+                            limit=384,
+                            index_cjk_characters=True,
+                        )
                     )
                     cursor.execute(
                         """

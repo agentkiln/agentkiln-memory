@@ -8,12 +8,16 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+MIN_TIMESTAMP_MS = -62_135_596_800_000  # 0001-01-01T00:00:00Z
+MAX_TIMESTAMP_MS = 253_402_300_799_999  # 9999-12-31T23:59:59.999Z
+
+
 class MemoryMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     role: Literal["user", "assistant"]
     content: str
-    timestamp: int | None = None
+    timestamp: int | None = Field(default=None, ge=MIN_TIMESTAMP_MS, le=MAX_TIMESTAMP_MS)
 
 
 class AddRequest(BaseModel):

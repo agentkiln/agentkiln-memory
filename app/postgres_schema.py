@@ -4,6 +4,7 @@ import re
 
 
 QUOTED_TERM_RE = re.compile(r'"((?:[^"]|"")*)"')
+MAX_CJK_LIKE_TERMS = 12
 
 
 def to_tsquery(query: str) -> str:
@@ -21,14 +22,22 @@ def to_tsquery(query: str) -> str:
 
 
 def cjk_terms(query: str) -> list[str]:
-    """Return CJK terms that PostgreSQL's simple parser will not tokenize."""
+    """Bound user-scoped LIKE fallbacks for CJK terms absent from older indexes."""
     terms: list[str] = []
     for match in QUOTED_TERM_RE.finditer(query):
         term = match.group(1).replace('""', '"').strip()
         cleaned = re.sub(r"[^\w\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+", "", term)
-        if cleaned and not cleaned.isascii():
+        if cleaned and not cleaned.isascii() and cleaned not in terms:
             terms.append(cleaned)
-    return terms[:200]
+    if not terms:
+        return []
+
+    multi_character = [term for term in terms if len(term) > 1]
+    selected = [terms[0]] if len(terms[0]) == 1 else []
+    selected.extend(term for term in multi_character if term not in selected)
+    if not multi_character:
+        selected.extend(term for term in terms if term not in selected)
+    return selected[:MAX_CJK_LIKE_TERMS]
 
 
 SCHEMA_SQL = """

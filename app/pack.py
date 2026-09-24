@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .db import MemoryRow
 from .text import estimate_tokens
@@ -17,7 +17,13 @@ class PackedWindow:
 
 def render_line(row: MemoryRow) -> str:
     if row.occurred_at is not None:
-        timestamp = datetime.fromtimestamp(row.occurred_at / 1000, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        try:
+            timestamp = (
+                datetime(1970, 1, 1, tzinfo=timezone.utc)
+                + timedelta(milliseconds=row.occurred_at)
+            ).isoformat().replace("+00:00", "Z")
+        except OverflowError:
+            timestamp = f"{row.occurred_at}ms"
         return f"[{row.id} | {row.role} | {timestamp}] {row.content}"
     return f"[{row.id} | {row.role}] {row.content}"
 
